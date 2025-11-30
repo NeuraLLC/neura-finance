@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuraPay Security Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #000000;
+      color: #ffffff;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #ff4444 0%, #ff8844 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 1rem;
+    }
+
+    .nav {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .nav a {
+      color: #00ff88;
+      text-decoration: none;
+      margin: 0 1rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid #00ff88;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .nav a:hover {
+      background: #00ff88;
+      color: #000;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid #2a2a2a;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: #00ff88;
+      box-shadow: 0 4px 20px rgba(0, 255, 136, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #00ff88;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-content {
+      color: #ccc;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .stat-row:last-child {
+      border-bottom: none;
+    }
+
+    .stat-label {
+      color: #888;
+      font-size: 0.9rem;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #fff;
+      font-size: 1rem;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #00ff88;
+      animation: pulse 2s infinite;
+      margin-right: 0.5rem;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .timestamp {
+      text-align: center;
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid #2a2a2a;
+    }
+
+    .error {
+      background: #2a1a1a;
+      border: 1px solid #ff4444;
+      border-radius: 8px;
+      padding: 1rem;
+      color: #ff8888;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    .alert {
+      background: #2a2a1a;
+      border: 1px solid #ffaa44;
+      border-radius: 8px;
+      padding: 1rem;
+      color: #ffbb66;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 2rem 0 1rem;
+      color: #fff;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .config-item {
+      background: #0a0a0a;
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid #2a2a2a;
+    }
+
+    .config-label {
+      color: #666;
+      font-size: 0.85rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .config-value {
+      color: #00ff88;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔒 Security Dashboard</h1>
+      <p class="subtitle">Real-time security monitoring and threat detection</p>
+    </div>
+
+    <div class="nav">
+      <a href="/health">Health Dashboard</a>
+      <a href="/security/stats">Security Stats</a>
+    </div>
+
+    <div id="error-message" style="display: none;" class="error"></div>
+
+    <div class="stats-grid">
+      <div class="card">
+        <div class="card-title">
+          <span class="status-indicator"></span>
+          DDoS Protection
+        </div>
+        <div class="card-content" id="ddos-stats">
+          <div class="stat-row">
+            <span class="stat-label">Tracked IPs</span>
+            <span class="stat-value" id="ddos-tracked">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Blocked IPs</span>
+            <span class="stat-value" id="ddos-blocked">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Burst Trackers</span>
+            <span class="stat-value" id="ddos-bursts">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span class="status-indicator"></span>
+          Burst Detection
+        </div>
+        <div class="card-content" id="burst-stats">
+          <div class="stat-row">
+            <span class="stat-label">Tracked IPs</span>
+            <span class="stat-value" id="burst-tracked">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Whitelisted IPs</span>
+            <span class="stat-value" id="burst-whitelisted">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Anomalies Detected</span>
+            <span class="stat-value" id="burst-anomalies">-</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span class="status-indicator"></span>
+          Rate Limiting
+        </div>
+        <div class="card-content" id="rate-limit-stats">
+          <div class="stat-row">
+            <span class="stat-label">Global Limit</span>
+            <span class="stat-value" id="rate-global">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Auth Limit</span>
+            <span class="stat-value" id="rate-auth">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Payment Limit</span>
+            <span class="stat-value" id="rate-payment">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">DDoS Protection Configuration</div>
+    <div class="config-grid">
+      <div class="config-item">
+        <div class="config-label">Max Requests/Minute</div>
+        <div class="config-value" id="ddos-rpm">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Max Requests/Second</div>
+        <div class="config-value" id="ddos-rps">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Burst Threshold</div>
+        <div class="config-value" id="ddos-burst-threshold">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Block Duration (min)</div>
+        <div class="config-value" id="ddos-block-duration">-</div>
+      </div>
+    </div>
+
+    <div class="section-title">Burst Detection Configuration</div>
+    <div class="config-grid">
+      <div class="config-item">
+        <div class="config-label">Window Size (seconds)</div>
+        <div class="config-value" id="burst-window">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Micro Burst Threshold</div>
+        <div class="config-value" id="burst-micro">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Sustained Burst Threshold</div>
+        <div class="config-value" id="burst-sustained">-</div>
+      </div>
+      <div class="config-item">
+        <div class="config-label">Pattern Threshold</div>
+        <div class="config-value" id="burst-pattern">-</div>
+      </div>
+    </div>
+
+    <div class="timestamp">
+      Last updated: <span id="last-updated">-</span>
+    </div>
+  </div>
+
+  <script>
+    async function fetchSecurityData() {
+      try {
+        const response = await fetch('/security/stats', {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const data = result.data;
+
+        // DDoS Stats
+        document.getElementById('ddos-tracked').textContent = data.ddos.trackedIPs || 0;
+        document.getElementById('ddos-blocked').textContent = data.ddos.blockedIPs || 0;
+        document.getElementById('ddos-bursts').textContent = data.ddos.burstTrackers || 0;
+
+        // DDoS Config
+        document.getElementById('ddos-rpm').textContent = data.ddos.configuration.maxRequestsPerMinute;
+        document.getElementById('ddos-rps').textContent = data.ddos.configuration.maxRequestsPerSecond;
+        document.getElementById('ddos-burst-threshold').textContent = data.ddos.configuration.burstThreshold;
+        document.getElementById('ddos-block-duration').textContent = data.ddos.configuration.blockDuration;
+
+        // Burst Stats
+        document.getElementById('burst-tracked').textContent = data.burst.trackedIPs || 0;
+        document.getElementById('burst-whitelisted').textContent = data.burst.whitelistedIPs || 0;
+        document.getElementById('burst-anomalies').textContent = data.burst.anomaliesDetected || 0;
+
+        // Burst Config
+        document.getElementById('burst-window').textContent = data.burst.configuration.windowSize;
+        document.getElementById('burst-micro').textContent = data.burst.configuration.microBurstThreshold;
+        document.getElementById('burst-sustained').textContent = data.burst.configuration.sustainedBurstThreshold;
+        document.getElementById('burst-pattern').textContent = data.burst.configuration.patternThreshold;
+
+        // Rate Limits
+        const rateLimits = data.rateLimits.limiters;
+        document.getElementById('rate-global').textContent = `${rateLimits.global.max}/${rateLimits.global.windowMs / 1000}s`;
+        document.getElementById('rate-auth').textContent = `${rateLimits.auth.max}/${rateLimits.auth.windowMs / 1000}s`;
+        document.getElementById('rate-payment').textContent = `${rateLimits.payment.max}/${rateLimits.payment.windowMs / 1000}s`;
+
+        // Timestamp
+        document.getElementById('last-updated').textContent = new Date(data.timestamp).toLocaleString();
+
+        clearError();
+      } catch (error) {
+        showError('Failed to fetch security data: ' + error.message);
+      }
+    }
+
+    function showError(message) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    function clearError() {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.style.display = 'none';
+    }
+
+    // Initial fetch
+    fetchSecurityData();
+
+    // Auto-refresh every 5 seconds
+    setInterval(fetchSecurityData, 5000);
+  </script>
+</body>
+</html>

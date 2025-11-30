@@ -1,0 +1,114 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  /* Apple-style smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #333333;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+}
+
+@layer components {
+  /* Revolut-style button */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-pill text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .btn-primary {
+    @apply btn bg-foreground text-background hover:bg-foreground/90 focus:ring-foreground;
+  }
+
+  .btn-secondary {
+    @apply btn bg-card text-foreground hover:bg-card-hover focus:ring-card border border-border;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent text-white hover:bg-accent/90 focus:ring-accent;
+  }
+
+  /* Social login buttons */
+  .btn-social {
+    @apply btn bg-card text-foreground hover:bg-card-hover border border-border;
+  }
+
+  /* Revolut-style card */
+  .card {
+    @apply bg-card rounded-card border border-border/50 p-6 transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:bg-card-hover hover:border-border;
+  }
+
+  /* Revolut-style input */
+  .input {
+    @apply w-full px-4 py-3.5 bg-input border border-input-border rounded-xl text-foreground placeholder:text-secondary focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-all duration-200;
+  }
+
+  /* Apple-style badge */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning/10 text-warning;
+  }
+
+  .badge-error {
+    @apply badge bg-error/10 text-error;
+  }
+
+  .badge-secondary {
+    @apply badge bg-card text-secondary;
+  }
+}
+
+@layer utilities {
+  /* Text utilities */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Glass effect for dark theme */
+  .glass {
+    @apply backdrop-blur-xl bg-card/80 border border-border/50;
+  }
+
+  /* Smooth animations */
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+}

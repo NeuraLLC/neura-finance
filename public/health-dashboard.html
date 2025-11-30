@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeuraPay Health Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #000000;
+      color: #ffffff;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #ffffff 0%, #8b8b8b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.5rem 1.5rem;
+      background: #00ff88;
+      color: #000000;
+      border-radius: 50px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 1rem;
+    }
+
+    .status-badge.loading {
+      background: #8b8b8b;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      background: #2a2a2a;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 255, 136, 0.1);
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: #8b8b8b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .stat-value.good {
+      color: #00ff88;
+    }
+
+    .stat-value.warning {
+      color: #ffaa00;
+    }
+
+    .section {
+      margin-bottom: 2rem;
+    }
+
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .security-icon {
+      width: 24px;
+      height: 24px;
+      background: #00ff88;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #000000;
+      font-weight: 700;
+      font-size: 0.875rem;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+
+    .config-item:last-child {
+      border-bottom: none;
+    }
+
+    .config-label {
+      font-size: 0.875rem;
+      color: #8b8b8b;
+    }
+
+    .config-value {
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .footer {
+      margin-top: 3rem;
+      text-align: center;
+      padding-top: 2rem;
+      border-top: 1px solid #2a2a2a;
+      color: #8b8b8b;
+      font-size: 0.875rem;
+    }
+
+    .refresh-info {
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .error-message {
+      background: #ff4444;
+      color: #ffffff;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .nav {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .nav a {
+      color: #00ff88;
+      text-decoration: none;
+      margin: 0 1rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid #00ff88;
+      border-radius: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .nav a:hover {
+      background: #00ff88;
+      color: #000;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>&#x1F3E5; NeuraPay Health Dashboard</h1>
+      <div class="status-badge loading" id="statusBadge">&#x23F3; Loading...</div>
+      <p style="color: #8b8b8b; margin-top: 1rem;" id="headerInfo">
+        Fetching server status...
+      </p>
+    </div>
+
+    <div class="nav">
+      <a href="/health">Health Dashboard</a>
+      <a href="/security/stats">Security Stats</a>
+    </div>
+
+    <div id="errorContainer"></div>
+    <div id="contentContainer"></div>
+
+    <div class="footer">
+      <p>NeuraPay API Server v2.0 &#x2022; TypeScript + Express + Bun</p>
+      <div class="refresh-info">
+        <span class="pulse">&#x1F504;</span> Auto-refreshing every 5 seconds
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function fetchHealthData() {
+      try {
+        const response = await fetch('/health', {
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        renderDashboard(data);
+        clearError();
+      } catch (error) {
+        showError('Failed to fetch health data: ' + error.message);
+      }
+    }
+
+    function formatUptime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${minutes}m ${secs}s`;
+    }
+
+    function renderDashboard(data) {
+      // Update header
+      document.getElementById('statusBadge').className = 'status-badge';
+      document.getElementById('statusBadge').innerHTML = '&#x2705; System Healthy';
+      document.getElementById('headerInfo').textContent =
+        `${new Date().toLocaleString()} • Uptime: ${formatUptime(data.uptime)}`;
+
+      // Render content
+      const contentContainer = document.getElementById('contentContainer');
+      const uptimeFormatted = formatUptime(data.uptime);
+
+      contentContainer.innerHTML = `
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Environment</div>
+            <div class="stat-value">${data.environment || 'development'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Uptime</div>
+            <div class="stat-value good">${uptimeFormatted}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Tracked IPs</div>
+            <div class="stat-value">${data.security.ddos.trackedIPs}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Blocked IPs</div>
+            <div class="stat-value ${data.security.ddos.blockedIPs > 0 ? 'warning' : 'good'}">
+              ${data.security.ddos.blockedIPs}
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">
+            <span class="security-icon">&#x1F6E1;</span>
+            DDoS Protection
+          </div>
+          <div class="config-grid">
+            <div class="config-item">
+              <span class="config-label">Max Requests/Min</span>
+              <span class="config-value">${data.security.ddos.configuration.maxRequestsPerMinute}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Max Requests/Sec</span>
+              <span class="config-value">${data.security.ddos.configuration.maxRequestsPerSecond}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Burst Threshold</span>
+              <span class="config-value">${data.security.ddos.configuration.burstThreshold}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Block Duration</span>
+              <span class="config-value">${data.security.ddos.configuration.blockDuration} min</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">
+            <span class="security-icon">&#x26A1;</span>
+            Burst Detection
+          </div>
+          <div class="config-grid">
+            <div class="config-item">
+              <span class="config-label">Micro-Burst Threshold</span>
+              <span class="config-value">${data.security.burst.configuration.microBurstThreshold}/sec</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Sustained Burst</span>
+              <span class="config-value">${data.security.burst.configuration.sustainedBurstThreshold}/10s</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Anomalies Detected</span>
+              <span class="config-value">${data.security.burst.anomaliesDetected}</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Anomaly Score</span>
+              <span class="config-value">${data.security.burst.totalAnomalyScore}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">
+            <span class="security-icon">&#x1F6A7;</span>
+            Rate Limits
+          </div>
+          <div class="config-grid">
+            <div class="config-item">
+              <span class="config-label">Global</span>
+              <span class="config-value">${data.security.rateLimits.limiters.global.max}/min</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Authentication</span>
+              <span class="config-value">${data.security.rateLimits.limiters.auth.max}/15min</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Payments</span>
+              <span class="config-value">${data.security.rateLimits.limiters.payment.max}/min</span>
+            </div>
+            <div class="config-item">
+              <span class="config-label">Webhooks</span>
+              <span class="config-value">${data.security.rateLimits.limiters.webhook.max}/min</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function showError(message) {
+      const errorContainer = document.getElementById('errorContainer');
+      errorContainer.innerHTML = `
+        <div class="error-message">
+          &#x26A0; ${message}
+        </div>
+      `;
+      document.getElementById('statusBadge').className = 'status-badge warning';
+      document.getElementById('statusBadge').textContent = '&#x26A0; Error';
+    }
+
+    function clearError() {
+      document.getElementById('errorContainer').innerHTML = '';
+    }
+
+    // Initial fetch
+    fetchHealthData();
+
+    // Auto-refresh every 5 seconds
+    setInterval(fetchHealthData, 5000);
+  </script>
+</body>
+</html>
