@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -65,6 +66,17 @@ const navigation = [
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [userInfo, setUserInfo] = useState({
+    name: 'Merchant',
+    email: 'merchant@example.com'
+  })
+
+  useEffect(() => {
+    setUserInfo({
+      name: localStorage.getItem('businessName') || 'Merchant',
+      email: localStorage.getItem('businessEmail') || 'merchant@example.com'
+    })
+  }, [])
 
   const handleLogout = () => {
     localStorage.clear()
@@ -106,14 +118,14 @@ export default function Sidebar() {
       <div className="p-4 border-t border-border">
         <div className="flex items-center gap-3 px-3 py-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
-            {localStorage.getItem('businessEmail')?.[0].toUpperCase() || 'M'}
+            {userInfo.email[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
-              {localStorage.getItem('businessName') || 'Merchant'}
+              {userInfo.name}
             </p>
             <p className="text-xs text-secondary truncate">
-              {localStorage.getItem('businessEmail') || 'merchant@example.com'}
+              {userInfo.email}
             </p>
           </div>
         </div>
