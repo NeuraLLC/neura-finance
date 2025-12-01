@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import merchantsService from '../services/merchants.service';
+import paymentsService from '../services/payments.service';
 import { authenticateJWT } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -57,6 +58,25 @@ router.patch('/:id', authenticateJWT, validate(updateProfileSchema), asyncHandle
   }
   const merchant = await merchantsService.updateMerchantProfile(id, req.body);
   res.json({ success: true, data: { merchant } });
+}));
+
+router.get('/:id/payments', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const { limit, offset, status, start_date, end_date } = req.query;
+
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own merchant data' }});
+  }
+
+  const transactions = await paymentsService.listPaymentsByMerchantId(id, {
+    limit: limit ? parseInt(limit as string) : undefined,
+    offset: offset ? parseInt(offset as string) : undefined,
+    status: status as string,
+    start_date: start_date as string,
+    end_date: end_date as string
+  });
+  
+  res.json({ success: true, data: { transactions, count: transactions.length } });
 }));
 
 export default router;
