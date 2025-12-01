@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from './database.service';
 import { AppError } from '../middleware/errorHandler';
+import posthogService from './posthog.service';
 
 interface Merchant {
   id: string;
@@ -122,99 +123,156 @@ class AuthService {
     password: string,
     businessType: string | null = null
   ): Promise<SignupResponse> {
-    // Check if merchant already exists
-    const existingMerchant = await db.findOne<Merchant>('merchants', {
-      business_email: businessEmail,
-    });
+    try {
+      // Check if merchant already exists
+      const existingMerchant = await db.findOne<Merchant>('merchants', {
+        business_email: businessEmail,
+      });
 
-    if (existingMerchant) {
-      throw new AppError('Merchant with this email already exists', 400, 'MERCHANT_EXISTS');
-    }
+      if (existingMerchant) {
+        posthogService.captureLog('Signup failed - merchant exists', 'warn', {
+          merchantId: 'system',
+          email: businessEmail,
+        });
+        throw new AppError('Merchant with this email already exists', 400, 'MERCHANT_EXISTS');
+      }
 
-    // Hash password
-    const hashedPassword = await this.hashPassword(password);
+      // Hash password
+      const hashedPassword = await this.hashPassword(password);
 
-    // Generate API credentials
-    const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
-    const apiSecret = crypto.randomBytes(32).toString('hex');
-    const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
+      // Generate API credentials
+      const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
+      const apiSecret = crypto.randomBytes(32).toString('hex');
+      const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    // Create merchant
-    const merchant = await db.insert<Merchant>('merchants', {
-      business_name: businessName,
-      business_email: businessEmail,
-      business_type: businessType,
-      password: hashedPassword,
-      api_key: apiKey,
-      api_secret: apiSecretHash,
-      status: 'pending_verification',
-      environment: 'sandbox',
-    });
-
-    // Generate JWT
-    const accessToken = this.generateToken(merchant.id, merchant.business_email);
-
-    return {
-      accessToken,
-      merchant: {
-        id: merchant.id,
-        business_name: merchant.business_name,
-        business_email: merchant.business_email,
-        business_type: merchant.business_type,
-        status: merchant.status,
-        environment: merchant.environment,
-      },
-      api_credentials: {
+      // Create merchant
+      const merchant = await db.insert<Merchant>('merchants', {
+        business_name: businessName,
+        business_email: businessEmail,
+        business_type: businessType,
+        password: hashedPassword,
         api_key: apiKey,
-        api_secret: apiSecret, // Only shown once
-      },
-    };
+        api_secret: apiSecretHash,
+        status: 'pending_verification',
+        environment: 'sandbox',
+      });
+
+      // Generate JWT
+      const accessToken = this.generateToken(merchant.id, merchant.business_email);
+
+      // Log successful signup
+      posthogService.captureLog('Merchant signup successful', 'info', {
+        merchantId: merchant.id,
+        email: merchant.business_email,
+        businessName: merchant.business_name,
+      });
+
+      return {
+        accessToken,
+        merchant: {
+          id: merchant.id,
+          business_name: merchant.business_name,
+          business_email: merchant.business_email,
+          business_type: merchant.business_type,
+          status: merchant.status,
+          environment: merchant.environment,
+        },
+        api_credentials: {
+          api_key: apiKey,
+          api_secret: apiSecret, // Only shown once
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      posthogService.captureError(error as Error, {
+        merchantId: 'system',
+        email: businessEmail,
+        action: 'signup',
+      });
+      throw error;
+    }
   }
 
   /**
    * Login merchant
    */
   async login(businessEmail: string, password: string): Promise<LoginResponse> {
-    // Find merchant
-    const merchant = await db.findOne<Merchant>('merchants', {
-      business_email: businessEmail,
-    });
+    try {
+      // Find merchant
+      const merchant = await db.findOne<Merchant>('merchants', {
+        business_email: businessEmail,
+      });
 
-    if (!merchant) {
-      throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      if (!merchant) {
+        posthogService.captureLog('Login failed - merchant not found', 'warn', {
+          merchantId: 'system',
+          email: businessEmail,
+        });
+        throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      }
+
+      // Verify password
+      const isPasswordValid = await this.verifyPassword(password, merchant.password);
+
+      if (!isPasswordValid) {
+        posthogService.captureLog('Login failed - invalid password', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      }
+
+      // Check if merchant is active
+      if (merchant.status === 'suspended') {
+        posthogService.captureLog('Login failed - account suspended', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Account is suspended', 403, 'ACCOUNT_SUSPENDED');
+      }
+
+      if (merchant.status === 'closed') {
+        posthogService.captureLog('Login failed - account closed', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Account is closed', 403, 'ACCOUNT_CLOSED');
+      }
+
+      // Generate JWT
+      const accessToken = this.generateToken(merchant.id, merchant.business_email);
+
+      // Log successful login
+      posthogService.captureLog('Merchant login successful', 'info', {
+        merchantId: merchant.id,
+        email: merchant.business_email,
+      });
+
+      return {
+        accessToken,
+        merchant: {
+          id: merchant.id,
+          business_name: merchant.business_name,
+          business_email: merchant.business_email,
+          business_type: merchant.business_type,
+          status: merchant.status,
+          environment: merchant.environment,
+          stripe_onboarding_complete: merchant.stripe_onboarding_complete,
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      posthogService.captureError(error as Error, {
+        merchantId: 'system',
+        email: businessEmail,
+        action: 'login',
+      });
+      throw error;
     }
-
-    // Verify password
-    const isPasswordValid = await this.verifyPassword(password, merchant.password);
-
-    if (!isPasswordValid) {
-      throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
-    }
-
-    // Check if merchant is active
-    if (merchant.status === 'suspended') {
-      throw new AppError('Account is suspended', 403, 'ACCOUNT_SUSPENDED');
-    }
-
-    if (merchant.status === 'closed') {
-      throw new AppError('Account is closed', 403, 'ACCOUNT_CLOSED');
-    }
-
-    // Generate JWT
-    const accessToken = this.generateToken(merchant.id, merchant.business_email);
-
-    return {
-      accessToken,
-      merchant: {
-        id: merchant.id,
-        business_name: merchant.business_name,
-        business_email: merchant.business_email,
-        business_type: merchant.business_type,
-        status: merchant.status,
-        environment: merchant.environment,
-        stripe_onboarding_complete: merchant.stripe_onboarding_complete,
-      },
-    };
   }
 
   /**

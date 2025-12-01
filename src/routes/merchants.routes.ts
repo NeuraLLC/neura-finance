@@ -3,6 +3,9 @@ import merchantsService from '../services/merchants.service';
 import { authenticateJWT } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 
+import { validate } from '../middleware/validate';
+import { updateEnvironmentSchema, updateWebhookSchema, updateProfileSchema } from '../schemas/merchant.schema';
+
 const router = express.Router();
 
 interface AuthenticatedRequest extends Request {
@@ -18,27 +21,21 @@ router.get('/:id', authenticateJWT, asyncHandler(async (req: AuthenticatedReques
   res.json({ success: true, data: { merchant } });
 }));
 
-router.patch('/:id/environment', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/environment', authenticateJWT, validate(updateEnvironmentSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { environment } = req.body;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only update your own merchant data' }});
   }
-  if (!environment) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'environment is required' }});
-  }
   const result = await merchantsService.switchEnvironment(id, environment);
   res.json({ success: true, data: result });
 }));
 
-router.patch('/:id/webhook', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id/webhook', authenticateJWT, validate(updateWebhookSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { webhook_url } = req.body;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only update your own merchant data' }});
-  }
-  if (!webhook_url) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'webhook_url is required' }});
   }
   const result = await merchantsService.updateWebhookUrl(id, webhook_url);
   res.json({ success: true, data: result });
@@ -53,7 +50,7 @@ router.get('/:id/stats', authenticateJWT, asyncHandler(async (req: Authenticated
   res.json({ success: true, data: stats });
 }));
 
-router.patch('/:id', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.patch('/:id', authenticateJWT, validate(updateProfileSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only update your own merchant data' }});

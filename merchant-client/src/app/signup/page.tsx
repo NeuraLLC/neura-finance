@@ -55,18 +55,22 @@ export default function SignupPage() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Signup failed')
+        throw new Error(data.error?.message || data.message || 'Signup failed')
       }
 
-      // Store JWT token and merchant info
-      localStorage.setItem('accessToken', data.access_token)
-      localStorage.setItem('merchantId', data.merchant.id)
-      localStorage.setItem('businessName', data.merchant.business_name)
-      localStorage.setItem('businessEmail', data.merchant.business_email)
+      // Extract the actual data from the API response structure
+      const { accessToken, merchant, api_credentials } = data.data
 
-      // Store API key for future reference (shown only once)
-      if (data.merchant.api_key) {
-        localStorage.setItem('apiKey', data.merchant.api_key)
+      // Store JWT token and merchant info
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('merchantId', merchant.id)
+      localStorage.setItem('businessName', merchant.business_name)
+      localStorage.setItem('businessEmail', merchant.business_email)
+
+      // Store API credentials for future reference (shown only once)
+      if (api_credentials?.api_key) {
+        localStorage.setItem('apiKey', api_credentials.api_key)
+        localStorage.setItem('apiSecret', api_credentials.api_secret)
       }
 
       // Mark as new user for onboarding

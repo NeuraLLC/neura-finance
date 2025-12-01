@@ -48,11 +48,13 @@ export async function apiRequest<T>(
       }
     }
 
-    const error = await response.json().catch(() => ({ message: 'Request failed' }))
-    throw new Error(error.message || `HTTP ${response.status}`)
+    const error = await response.json().catch(() => ({ error: { message: 'Request failed' } }))
+    throw new Error(error.error?.message || error.message || `HTTP ${response.status}`)
   }
 
-  return response.json()
+  const responseData = await response.json()
+  // Unwrap the data from the API response structure
+  return responseData.data || responseData
 }
 
 /**

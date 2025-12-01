@@ -3,32 +3,23 @@ import authService from '../services/auth.service';
 import { authenticateJWT } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 
+import { validate } from '../middleware/validate';
+import { registerSchema, loginSchema } from '../schemas/auth.schema';
+
 const router = express.Router();
 
 interface AuthenticatedRequest extends Request {
   merchant?: any;
 }
 
-router.post('/signup', asyncHandler(async (req: Request, res: Response) => {
+router.post('/signup', validate(registerSchema), asyncHandler(async (req: Request, res: Response) => {
   const { business_name, business_email, password, business_type } = req.body;
-  if (!business_name || !business_email || !password) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'business_name, business_email, and password are required' }
-    });
-  }
   const result = await authService.signup(business_name, business_email, password, business_type);
   res.status(201).json({ success: true, data: result });
 }));
 
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+router.post('/login', validate(loginSchema), asyncHandler(async (req: Request, res: Response) => {
   const { business_email, password } = req.body;
-  if (!business_email || !password) {
-    return res.status(400).json({
-      success: false,
-      error: { code: 'VALIDATION_ERROR', message: 'business_email and password are required' }
-    });
-  }
   const result = await authService.login(business_email, password);
   res.json({ success: true, data: result });
 }));
