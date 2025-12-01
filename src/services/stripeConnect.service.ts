@@ -63,7 +63,7 @@ class StripeConnectService {
    */
   generateConnectUrl(merchantId: string, state: string | null = null): string {
     const redirectUri = process.env.STRIPE_CONNECT_REDIRECT_URI ||
-                       `${process.env.APP_URL}/stripe-connect/callback`;
+                       `${process.env.FRONTEND_URL}/stripe-connect/callback`;
 
     const params = new URLSearchParams({
       client_id: process.env.STRIPE_CONNECT_CLIENT_ID || '',
@@ -197,8 +197,8 @@ class StripeConnectService {
     try {
       const accountLink = await stripe.accountLinks.create({
         account: merchant.stripe_account_id,
-        refresh_url: `${process.env.APP_URL}/dashboard/settings`,
-        return_url: `${process.env.APP_URL}/dashboard`,
+        refresh_url: `${process.env.FRONTEND_URL}/dashboard/settings`,
+        return_url: `${process.env.FRONTEND_URL}/dashboard`,
         type,
       });
 
