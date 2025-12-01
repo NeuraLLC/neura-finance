@@ -214,7 +214,7 @@ app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`= NeuraPay API Server v2.0`);
+  console.log(`= API Server v2.0`);
   console.log(`${'='.repeat(60)}`);
   console.log(`= Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`= Server running on port ${PORT}`);
@@ -238,7 +238,7 @@ const gracefulShutdown = (signal: string) => {
 
   server.close(() => {
     console.log(' HTTP server closed');
-    console.log('=K NeuraPay API Server stopped');
+    console.log('=K API Server stopped');
     process.exit(0);
   });
 
