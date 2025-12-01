@@ -1,5 +1,3 @@
-/// <reference types="multer" />
-
 /**
  * File Upload Middleware
  * Configures multer for handling multipart file uploads
