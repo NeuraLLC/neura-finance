@@ -1,18 +1,11 @@
 import Stripe from 'stripe';
 import db from './database.service';
-import merchantsService from './merchants.service';
+import merchantsService, { Merchant } from './merchants.service';
 import { AppError } from '../middleware/errorHandler';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-12-18.acacia' as any,
 });
-
-interface Merchant {
-  id: string;
-  environment: string;
-  stripe_account_id?: string;
-  stripe_charges_enabled?: boolean;
-}
 
 interface Customer {
   id: string;
@@ -128,6 +121,20 @@ class PaymentsService {
     // Check if merchant has Stripe Connect account
     if (!merchant.stripe_account_id) {
       throw new AppError('Stripe Connect account not configured', 400, 'STRIPE_NOT_CONFIGURED');
+    }
+
+    // 30-day enforcement for deferred onboarding
+    if (merchant.deferred_onboarding_enabled && !merchant.stripe_onboarding_complete && merchant.first_payment_at) {
+      const firstPaymentDate = new Date(merchant.first_payment_at);
+      const daysSinceFirstPayment = Math.floor((Date.now() - firstPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (daysSinceFirstPayment >= 30) {
+        throw new AppError(
+          'You must complete your Stripe onboarding before processing new payments. Your 30-day grace period has ended. Please complete your onboarding in the Settings page.',
+          403,
+          'ONBOARDING_REQUIRED'
+        );
+      }
     }
 
     if (!merchant.stripe_charges_enabled) {

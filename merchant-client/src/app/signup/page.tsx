@@ -15,6 +15,7 @@ export default function SignupPage() {
     password: '',
     confirmPassword: '',
     business_type: 'other',
+    country: 'US',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -49,6 +50,7 @@ export default function SignupPage() {
           business_email: formData.business_email,
           password: formData.password,
           business_type: formData.business_type,
+          country: formData.country,
         }),
       })
 
@@ -76,8 +78,8 @@ export default function SignupPage() {
       // Mark as new user for onboarding
       localStorage.setItem('isNewUser', 'true')
 
-      // Redirect to onboarding for new users
-      router.push('/onboarding')
+      // Redirect to dashboard (onboarding is now optional via settings)
+      router.push('/dashboard')
     } catch (err: any) {
       setError(err.message || 'Signup failed. Please try again.')
     } finally {
@@ -150,6 +152,27 @@ export default function SignupPage() {
                 placeholder="Business email"
                 required
               />
+            </div>
+
+            <div>
+              <select
+                id="country"
+                value={formData.country}
+                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                className="input"
+              >
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="DE">Germany</option>
+                <option value="FR">France</option>
+                <option value="IT">Italy</option>
+                <option value="ES">Spain</option>
+                <option value="NL">Netherlands</option>
+                <option value="BE">Belgium</option>
+                <option value="AT">Austria</option>
+                <option value="IE">Ireland</option>
+                <option value="PT">Portugal</option>
+              </select>
             </div>
 
             <div>
