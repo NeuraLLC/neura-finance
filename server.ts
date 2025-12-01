@@ -166,26 +166,26 @@ app.get('/security/stats', (req: Request, res: Response) => {
 // ==============================================
 
 // Authentication routes (strict rate limiting)
-app.use('/auth', advancedRateLimiting.authLimiter, authRoutes);
+app.use('/api/auth', advancedRateLimiting.authLimiter, authRoutes);
 
 // Merchant routes (standard rate limiting)
-app.use('/merchants', merchantRoutes);
+app.use('/api/merchants', merchantRoutes);
 
 // Payment routes (payment-specific rate limiting)
-app.use('/payments', advancedRateLimiting.paymentLimiter, paymentRoutes);
+app.use('/api/payments', advancedRateLimiting.paymentLimiter, paymentRoutes);
 
 // Dispute routes (standard rate limiting)
-app.use('/disputes', disputeRoutes);
-app.use('/merchants', disputeRoutes);
+app.use('/api/disputes', disputeRoutes);
+app.use('/api/merchants', disputeRoutes);
 
 // Stripe Connect routes (standard rate limiting)
-app.use('/stripe-connect', stripeConnectRoutes);
+app.use('/api/stripe-connect', stripeConnectRoutes);
 
 // Webhook routes (permissive rate limiting for external services)
-app.use('/webhooks', advancedRateLimiting.webhookLimiter, webhookRoutes);
+app.use('/api/webhooks', advancedRateLimiting.webhookLimiter, webhookRoutes);
 
 // Utility routes (public, for client IP, etc.)
-app.use('/utils', utilsRoutes);
+// app.use('/utils', utilsRoutes);
 
 // ==============================================
 // ERROR HANDLING

@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import paymentsService from '../services/payments.service';
 import { authenticateAPIKey } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
+import { validate } from '../middleware/validate';
+import { createPaymentSchema, listPaymentsSchema, refundPaymentSchema } from '../schemas/payment.schema';
 
 const router = express.Router();
 
@@ -9,11 +11,8 @@ interface AuthenticatedRequest extends Request {
   apiKey?: string;
 }
 
-router.post('/', authenticateAPIKey, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', authenticateAPIKey, validate(createPaymentSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { amount, currency, description, customer_email, customer_name, payment_method, metadata } = req.body;
-  if (!amount) {
-    return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'amount is required' }});
-  }
   const idempotencyKey = req.headers['idempotency-key'] as string;
   const result = await paymentsService.createPayment(req.apiKey!, {
     amount, currency, description, customer_email, customer_name, payment_method, idempotency_key: idempotencyKey, metadata
@@ -27,7 +26,7 @@ router.get('/:id', authenticateAPIKey, asyncHandler(async (req: AuthenticatedReq
   res.json({ success: true, data: { transaction } });
 }));
 
-router.get('/', authenticateAPIKey, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', authenticateAPIKey, validate(listPaymentsSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { limit, offset, status, start_date, end_date } = req.query;
   const transactions = await paymentsService.listPayments(req.apiKey!, {
     limit: limit ? parseInt(limit as string) : undefined,
@@ -39,11 +38,11 @@ router.get('/', authenticateAPIKey, asyncHandler(async (req: AuthenticatedReques
   res.json({ success: true, data: { transactions, count: transactions.length } });
 }));
 
-router.post('/:id/refund', authenticateAPIKey, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:id/refund', authenticateAPIKey, validate(refundPaymentSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { amount, reason } = req.body;
   const result = await paymentsService.refundPayment(req.apiKey!, id, {
-    amount: amount ? parseInt(amount) : undefined, reason
+    amount, reason
   });
   res.json({ success: true, data: result });
 }));

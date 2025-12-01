@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import posthogService from '../services/posthog.service';
 
 /**
  * Custom Application Error class
@@ -52,8 +53,29 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
     });
   }
 
+  // Log to PostHog
+  const errorContext = {
+    path: req.path,
+    method: req.method,
+    statusCode,
+    code,
+    ...(err.details && { validationDetails: err.details }),
+  };
+
+  if (statusCode >= 500) {
+    // Server errors - capture as errors
+    posthogService.captureError(err, errorContext);
+  } else if (statusCode >= 400) {
+    // Client errors - capture as logs (warnings for 4xx errors)
+    posthogService.captureLog(
+      `${code || 'CLIENT_ERROR'}: ${message}`,
+      'warn',
+      errorContext
+    );
+  }
+
   // Send error response
-  res.status(statusCode).json({
+  const errorResponse: any = {
     success: false,
     error: {
       code: code || 'INTERNAL_ERROR',
@@ -61,8 +83,19 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
         ? 'An unexpected error occurred'
         : message,
     },
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
-  });
+  };
+
+  // Include validation details if present
+  if (err.details) {
+    errorResponse.error.details = err.details;
+  }
+
+  // Include stack trace in non-production
+  if (process.env.NODE_ENV !== 'production') {
+    errorResponse.stack = err.stack;
+  }
+
+  res.status(statusCode).json(errorResponse);
 };
 
 /**

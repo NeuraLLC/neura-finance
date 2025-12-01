@@ -5,6 +5,7 @@ import db from './database.service';
 import { AppError } from '../middleware/errorHandler';
 import { Merchant } from './merchants.service';
 import stripeConnectService from './stripeConnect.service';
+import posthogService from './posthog.service';
 
 interface TokenPayload {
   merchantId: string;
@@ -104,133 +105,190 @@ class AuthService {
     businessType: string | null = null,
     country: string = 'US'
   ): Promise<SignupResponse> {
-    // Check if merchant already exists
-    const existingMerchant = await db.findOne<Merchant>('merchants', {
-      business_email: businessEmail,
-    });
-
-    if (existingMerchant) {
-      throw new AppError('Merchant with this email already exists', 400, 'MERCHANT_EXISTS');
-    }
-
-    // Hash password
-    const hashedPassword = await this.hashPassword(password);
-
-    // Generate API credentials
-    const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
-    const apiSecret = crypto.randomBytes(32).toString('hex');
-    const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
-
-    // Map country to currency
-    const currencyMap: Record<string, string> = {
-      'US': 'usd',
-      'GB': 'gbp',
-      'DE': 'eur',
-      'FR': 'eur',
-      'IT': 'eur',
-      'ES': 'eur',
-      'NL': 'eur',
-      'BE': 'eur',
-      'AT': 'eur',
-      'IE': 'eur',
-      'PT': 'eur',
-    };
-
-    const defaultCurrency = currencyMap[country] || 'usd';
-
-    // Create merchant with active status for deferred onboarding
-    const merchant = await db.insert<Merchant>('merchants', {
-      business_name: businessName,
-      business_email: businessEmail,
-      business_type: businessType,
-      password: hashedPassword,
-      api_key: apiKey,
-      api_secret: apiSecretHash,
-      status: 'active', // KEY CHANGE: Active immediately
-      environment: 'sandbox',
-      country,
-      default_currency: defaultCurrency,
-      deferred_onboarding_enabled: true,
-    });
-
-    // Create Stripe account immediately (non-blocking)
     try {
-      await stripeConnectService.createCustomAccount(
-        merchant.id,
-        businessEmail,
-        country
-      );
-      console.log('Stripe account created successfully during signup');
-    } catch (error) {
-      // Don't fail signup if Stripe account creation fails
-      // User can set it up later via onboarding page
-      console.error('Failed to create Stripe account during signup:', error);
-    }
+      // Check if merchant already exists
+      const existingMerchant = await db.findOne<Merchant>('merchants', {
+        business_email: businessEmail,
+      });
 
-    // Generate JWT
-    const accessToken = this.generateToken(merchant.id, merchant.business_email);
+      if (existingMerchant) {
+        posthogService.captureLog('Signup failed - merchant exists', 'warn', {
+          merchantId: 'system',
+          email: businessEmail,
+        });
+        throw new AppError('Merchant with this email already exists', 400, 'MERCHANT_EXISTS');
+      }
 
-    return {
-      accessToken,
-      merchant: {
-        id: merchant.id,
-        business_name: merchant.business_name,
-        business_email: merchant.business_email,
-        business_type: merchant.business_type,
-        status: merchant.status,
-        environment: merchant.environment,
-      },
-      api_credentials: {
+      // Hash password
+      const hashedPassword = await this.hashPassword(password);
+
+      // Generate API credentials
+      const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
+      const apiSecret = crypto.randomBytes(32).toString('hex');
+      const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
+
+      // Map country to currency
+      const currencyMap: Record<string, string> = {
+        'US': 'usd',
+        'GB': 'gbp',
+        'DE': 'eur',
+        'FR': 'eur',
+        'IT': 'eur',
+        'ES': 'eur',
+        'NL': 'eur',
+        'BE': 'eur',
+        'AT': 'eur',
+        'IE': 'eur',
+        'PT': 'eur',
+      };
+
+      const defaultCurrency = currencyMap[country] || 'usd';
+
+      // Create merchant with active status for deferred onboarding
+      const merchant = await db.insert<Merchant>('merchants', {
+        business_name: businessName,
+        business_email: businessEmail,
+        business_type: businessType,
+        password: hashedPassword,
         api_key: apiKey,
-        api_secret: apiSecret, // Only shown once
-      },
-    };
+        api_secret: apiSecretHash,
+        status: 'active', // KEY CHANGE: Active immediately
+        environment: 'sandbox',
+        country,
+        default_currency: defaultCurrency,
+        deferred_onboarding_enabled: true,
+      });
+
+      // Create Stripe account immediately (non-blocking)
+      try {
+        await stripeConnectService.createCustomAccount(
+          merchant.id,
+          businessEmail,
+          country
+        );
+        console.log('Stripe account created successfully during signup');
+      } catch (error) {
+        // Don't fail signup if Stripe account creation fails
+        // User can set it up later via onboarding page
+        console.error('Failed to create Stripe account during signup:', error);
+      }
+
+      // Generate JWT
+      const accessToken = this.generateToken(merchant.id, merchant.business_email);
+
+      // Track signup event
+      posthogService.capture(merchant.id, 'merchant_signed_up', {
+        business_type: businessType,
+        country,
+        currency: defaultCurrency,
+      });
+
+      return {
+        accessToken,
+        merchant: {
+          id: merchant.id,
+          business_name: merchant.business_name,
+          business_email: merchant.business_email,
+          business_type: merchant.business_type,
+          status: merchant.status,
+          environment: merchant.environment,
+        },
+        api_credentials: {
+          api_key: apiKey,
+          api_secret: apiSecret, // Only shown once
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      posthogService.captureError(error as Error, {
+        merchantId: 'system',
+        email: businessEmail,
+        action: 'signup',
+      });
+      throw error;
+    }
   }
 
   /**
    * Login merchant
    */
   async login(businessEmail: string, password: string): Promise<LoginResponse> {
-    // Find merchant
-    const merchant = await db.findOne<Merchant>('merchants', {
-      business_email: businessEmail,
-    });
+    try {
+      // Find merchant
+      const merchant = await db.findOne<Merchant>('merchants', {
+        business_email: businessEmail,
+      });
 
-    if (!merchant) {
-      throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      if (!merchant) {
+        posthogService.captureLog('Login failed - merchant not found', 'warn', {
+          merchantId: 'system',
+          email: businessEmail,
+        });
+        throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      }
+
+      // Verify password
+      const isPasswordValid = await this.verifyPassword(password, merchant.password);
+
+      if (!isPasswordValid) {
+        posthogService.captureLog('Login failed - invalid password', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
+      }
+
+      // Check if merchant is active
+      if (merchant.status === 'suspended') {
+        posthogService.captureLog('Login failed - account suspended', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Account is suspended', 403, 'ACCOUNT_SUSPENDED');
+      }
+
+      if (merchant.status === 'closed') {
+        posthogService.captureLog('Login failed - account closed', 'warn', {
+          merchantId: merchant.id,
+          email: businessEmail,
+        });
+        throw new AppError('Account is closed', 403, 'ACCOUNT_CLOSED');
+      }
+
+      // Generate JWT
+      const accessToken = this.generateToken(merchant.id, merchant.business_email);
+
+      // Log successful login
+      posthogService.captureLog('Merchant login successful', 'info', {
+        merchantId: merchant.id,
+        email: merchant.business_email,
+      });
+
+      return {
+        accessToken,
+        merchant: {
+          id: merchant.id,
+          business_name: merchant.business_name,
+          business_email: merchant.business_email,
+          business_type: merchant.business_type,
+          status: merchant.status,
+          environment: merchant.environment,
+          stripe_onboarding_complete: merchant.stripe_onboarding_complete,
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      posthogService.captureError(error as Error, {
+        merchantId: 'system',
+        email: businessEmail,
+        action: 'login',
+      });
+      throw error;
     }
-
-    // Verify password
-    const isPasswordValid = await this.verifyPassword(password, merchant.password);
-
-    if (!isPasswordValid) {
-      throw new AppError('Invalid credentials', 401, 'INVALID_CREDENTIALS');
-    }
-
-    // Check if merchant is active
-    if (merchant.status === 'suspended') {
-      throw new AppError('Account is suspended', 403, 'ACCOUNT_SUSPENDED');
-    }
-
-    if (merchant.status === 'closed') {
-      throw new AppError('Account is closed', 403, 'ACCOUNT_CLOSED');
-    }
-
-    // Generate JWT
-    const accessToken = this.generateToken(merchant.id, merchant.business_email);
-
-    return {
-      accessToken,
-      merchant: {
-        id: merchant.id,
-        business_name: merchant.business_name,
-        business_email: merchant.business_email,
-        business_type: merchant.business_type,
-        status: merchant.status,
-        environment: merchant.environment,
-        stripe_onboarding_complete: merchant.stripe_onboarding_complete,
-      },
-    };
   }
 
   /**

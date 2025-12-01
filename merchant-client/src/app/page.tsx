@@ -25,20 +25,23 @@ export default function LoginPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ business_email: email, password }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.message || 'Login failed')
+        throw new Error(data.error?.message || data.message || 'Login failed')
       }
 
+      // Extract the actual data from the API response structure
+      const { accessToken, merchant } = data.data
+
       // Store JWT token and merchant info
-      localStorage.setItem('accessToken', data.access_token)
-      localStorage.setItem('merchantId', data.merchant.id)
-      localStorage.setItem('businessName', data.merchant.business_name)
-      localStorage.setItem('businessEmail', data.merchant.business_email)
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('merchantId', merchant.id)
+      localStorage.setItem('businessName', merchant.business_name)
+      localStorage.setItem('businessEmail', merchant.business_email)
 
       // Redirect to dashboard
       router.push('/dashboard')

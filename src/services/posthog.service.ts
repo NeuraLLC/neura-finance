@@ -50,6 +50,53 @@ class PostHogService {
   }
 
   /**
+   * Capture an error
+   */
+  captureError(error: Error, context: Record<string, any> = {}) {
+    if (!this.client) return;
+
+    try {
+      const distinctId = context.userId || context.merchantId || 'system';
+      this.client.capture({
+        distinctId,
+        event: 'error_occurred',
+        properties: {
+          error_name: error.name,
+          error_message: error.message,
+          error_stack: error.stack,
+          ...context,
+          environment: process.env.NODE_ENV || 'development',
+        },
+      });
+    } catch (err) {
+      console.error('PostHog captureError error:', err);
+    }
+  }
+
+  /**
+   * Capture a log entry
+   */
+  captureLog(message: string, level: 'info' | 'warn' | 'error', context: Record<string, any> = {}) {
+    if (!this.client) return;
+
+    try {
+      const distinctId = context.userId || context.merchantId || 'system';
+      this.client.capture({
+        distinctId,
+        event: `log_${level}`,
+        properties: {
+          log_message: message,
+          log_level: level,
+          ...context,
+          environment: process.env.NODE_ENV || 'development',
+        },
+      });
+    } catch (error) {
+      console.error('PostHog captureLog error:', error);
+    }
+  }
+
+  /**
    * Shutdown client
    */
   async shutdown() {
