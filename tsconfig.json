@@ -19,8 +19,7 @@
     "strictNullChecks": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noImplicitReturns": false,
-    "types": ["node", "express", "bcrypt", "jsonwebtoken", "cors"]
+    "noImplicitReturns": false
   },
   "include": [
     "server.ts",
