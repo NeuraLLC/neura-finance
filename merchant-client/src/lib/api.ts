@@ -62,8 +62,11 @@ export async function apiRequest<T>(
  */
 export const api = {
   // Transactions
-  getTransactions: (limit = 100) =>
-    apiRequest<any[]>(`/payments?limit=${limit}`),
+  getTransactions: async (limit = 100) => {
+    const merchantId = localStorage.getItem('merchantId');
+    const response = await apiRequest<any>(`/merchants/${merchantId}/payments?limit=${limit}`);
+    return response.transactions || [];
+  },
 
   getTransaction: (id: string) =>
     apiRequest<any>(`/payments/${id}`),

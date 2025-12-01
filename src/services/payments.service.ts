@@ -289,6 +289,47 @@ class PaymentsService {
   }
 
   /**
+   * List payments for merchant by ID (for dashboard)
+   */
+  async listPaymentsByMerchantId(merchantId: string, options: ListPaymentsOptions = {}): Promise<Transaction[]> {
+    const {
+      limit = 10,
+      offset = 0,
+      status,
+      start_date,
+      end_date,
+    } = options;
+
+    const client = db.getClient();
+    let query = client
+      .from('transactions')
+      .select('*')
+      .eq('merchant_id', merchantId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (status) {
+      query = query.eq('status', status);
+    }
+
+    if (start_date) {
+      query = query.gte('created_at', start_date);
+    }
+
+    if (end_date) {
+      query = query.lte('created_at', end_date);
+    }
+
+    const { data: transactions, error } = await query;
+
+    if (error) {
+      throw new Error(`Database query error: ${error.message}`);
+    }
+
+    return transactions || [];
+  }
+
+  /**
    * Refund a payment
    */
   async refundPayment(
