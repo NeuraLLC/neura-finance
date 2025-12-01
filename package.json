@@ -33,7 +33,7 @@
     "multer": "^2.0.2",
     "posthog-node": "^4.0.1",
     "stripe": "^14.10.0",
-    "uuid": "^9.0.1"
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",

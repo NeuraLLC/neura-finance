@@ -6,7 +6,6 @@
 import Stripe from 'stripe';
 import fs from 'fs';
 import path from 'path';
-import { Readable } from 'stream';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-12-18.acacia' as any,
@@ -41,14 +40,11 @@ class StripeFileUploadService {
     const { fileBuffer, fileName, mimeType, purpose } = params;
 
     try {
-      // Convert buffer to readable stream
-      const fileStream = Readable.from(fileBuffer);
-
-      // Upload file to Stripe
+      // Upload file to Stripe using Buffer directly
       const file = await stripe.files.create({
         purpose: purpose,
         file: {
-          data: fileStream,
+          data: fileBuffer,
           name: fileName,
           type: mimeType,
         },
