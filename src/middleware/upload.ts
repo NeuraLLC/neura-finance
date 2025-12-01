@@ -1,9 +1,12 @@
+/// <reference types="multer" />
+
 /**
  * File Upload Middleware
  * Configures multer for handling multipart file uploads
  */
 
 import multer from 'multer';
+import { Request } from 'express';
 import path from 'path';
 
 // Configure memory storage (files stored in memory as Buffer)
@@ -11,7 +14,7 @@ import path from 'path';
 const storage = multer.memoryStorage();
 
 // File filter to validate file types
-const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedMimeTypes = [
     'application/pdf',
     'image/png',

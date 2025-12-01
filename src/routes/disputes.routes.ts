@@ -1,3 +1,4 @@
+/// <reference types="multer" />
 import express, { Request, Response } from 'express';
 import disputesService from '../services/disputes.service';
 import { authenticateJWT } from '../middleware/auth';
