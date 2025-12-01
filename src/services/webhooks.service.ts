@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import crypto from 'crypto';
 import db from './database.service';
 import disputesService from './disputes.service';
+import ledgerService from './ledger.service';
 import { AppError } from '../middleware/errorHandler';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -117,6 +118,18 @@ class WebhooksService {
         await this.handleDisputeFundsReinstated(event.data.object as Stripe.Dispute);
         break;
 
+      case 'identity.verification_session.verified':
+        await this.handleIdentityVerified(event.data.object as any);
+        break;
+
+      case 'identity.verification_session.requires_input':
+        await this.handleIdentityRequiresInput(event.data.object as any);
+        break;
+
+      case 'identity.verification_session.canceled':
+        await this.handleIdentityCanceled(event.data.object as any);
+        break;
+
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -158,6 +171,23 @@ class WebhooksService {
     );
 
     console.log('Payment succeeded:', transaction.id);
+
+    // Deferred Payment Logic
+    if (paymentIntent.metadata?.type === 'deferred_payment') {
+      const merchantId = paymentIntent.metadata.merchant_id;
+      if (merchantId) {
+        await ledgerService.addEntry(
+          merchantId,
+          'credit',
+          paymentIntent.amount,
+          paymentIntent.currency,
+          `Payment ${paymentIntent.id}`,
+          'pending',
+          { payment_intent_id: paymentIntent.id }
+        );
+        console.log('Added pending ledger entry for:', paymentIntent.id);
+      }
+    }
   }
 
   /**
@@ -248,6 +278,17 @@ class WebhooksService {
       return;
     }
 
+    // Debit Ledger for Refund
+    await ledgerService.addEntry(
+      transaction.merchant_id,
+      'debit',
+      charge.amount_refunded,
+      transaction.currency,
+      `Refund for ${charge.id}`,
+      'available',
+      { charge_id: charge.id }
+    );
+
     // Send webhook to merchant
     await this.sendMerchantWebhook(
       transaction.merchant_id,
@@ -285,6 +326,12 @@ class WebhooksService {
     } as any);
 
     console.log('Stripe account updated:', merchant.id);
+
+    // Check if fully verified and release funds
+    if (account.charges_enabled && account.payouts_enabled) {
+      await ledgerService.releaseFunds(merchant.id);
+      console.log('Released funds for merchant:', merchant.id);
+    }
   }
 
   /**
@@ -473,6 +520,17 @@ class WebhooksService {
         return;
       }
 
+      // Debit Ledger for Dispute
+      await ledgerService.addEntry(
+        localDispute.merchant_id,
+        'debit',
+        dispute.amount,
+        dispute.currency,
+        `Dispute funds withdrawn ${dispute.id}`,
+        'available',
+        { dispute_id: dispute.id }
+      );
+
       // Send webhook to merchant
       await this.sendMerchantWebhook(
         localDispute.merchant_id,
@@ -503,6 +561,17 @@ class WebhooksService {
         return;
       }
 
+      // Credit Ledger for Reinstated Funds
+      await ledgerService.addEntry(
+        localDispute.merchant_id,
+        'credit',
+        dispute.amount,
+        dispute.currency,
+        `Dispute funds reinstated ${dispute.id}`,
+        'available',
+        { dispute_id: dispute.id }
+      );
+
       // Send webhook to merchant
       await this.sendMerchantWebhook(
         localDispute.merchant_id,
@@ -518,6 +587,81 @@ class WebhooksService {
       console.log('Dispute funds reinstated:', dispute.id);
     } catch (error) {
       console.error('Error handling dispute funds reinstated:', error);
+    }
+  }
+
+  /**
+   * Handle identity verification verified
+   */
+  private async handleIdentityVerified(session: any): Promise<void> {
+    try {
+      // The metadata should contain the merchant_id that we set when creating the session
+      const merchantId = session.metadata?.merchant_id;
+      
+      if (!merchantId) {
+        console.error('No merchant_id in identity verification session metadata');
+        return;
+      }
+
+      // Update merchant record
+      await db.update<Merchant>('merchants', merchantId, {
+        identity_verification_status: 'verified',
+        identity_verification_session_id: session.id,
+        identity_verified_at: new Date().toISOString(),
+      } as any);
+
+      console.log('Identity verified for merchant:', merchantId);
+    } catch (error) {
+      console.error('Error handling identity verified:', error);
+    }
+  }
+
+  /**
+   * Handle identity verification requires input
+   */
+  private async handleIdentityRequiresInput(session: any): Promise<void> {
+    try {
+      const merchantId = session.metadata?.merchant_id;
+      
+      if (!merchantId) {
+        console.error('No merchant_id in identity verification session metadata');
+        return;
+      }
+
+      // Update merchant record
+      await db.update<Merchant>('merchants', merchantId, {
+        identity_verification_status: 'requires_input',
+        identity_verification_session_id: session.id,
+      } as any);
+
+      console.log('Identity verification requires input for merchant:', merchantId);
+      // TODO: Send notification to merchant to upload required documents
+    } catch (error) {
+      console.error('Error handling identity requires input:', error);
+    }
+  }
+
+  /**
+   * Handle identity verification canceled
+   */
+  private async handleIdentityCanceled(session: any): Promise<void> {
+    try {
+      const merchantId = session.metadata?.merchant_id;
+      
+      if (!merchantId) {
+        console.error('No merchant_id in identity verification session metadata');
+        return;
+      }
+
+      // Update merchant record
+      await db.update<Merchant>('merchants', merchantId, {
+        identity_verification_status: 'canceled',
+        identity_verification_session_id: session.id,
+      } as any);
+
+      console.log('Identity verification canceled for merchant:', merchantId);
+    } catch (error) {
+      console.error('Error handling identity canceled:', error);
     }
   }
 }

@@ -1,5 +1,7 @@
 import Stripe from 'stripe';
 import db from './database.service';
+import ledgerService from './ledger.service';
+import posthogService from './posthog.service';
 import { AppError } from '../middleware/errorHandler';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -10,6 +12,8 @@ interface Merchant {
   id: string;
   stripe_account_id?: string;
   status: string;
+  stripe_charges_enabled?: boolean;
+  stripe_payouts_enabled?: boolean;
 }
 
 interface OAuthTokenResponse {
@@ -287,6 +291,130 @@ class StripeConnectService {
         'STRIPE_ERROR'
       );
     }
+  }
+  /**
+   * Create a Custom Stripe Account (White-Label)
+   */
+  async createCustomAccount(merchantId: string, email: string, country: string = 'US'): Promise<string> {
+    try {
+      const account = await stripe.accounts.create({
+        type: 'custom',
+        country,
+        email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        settings: {
+          payouts: {
+            schedule: {
+              interval: 'manual',
+            },
+          },
+        },
+        business_type: 'company',
+      });
+
+      // Update merchant record
+      await db.update<Merchant>('merchants', merchantId, {
+        stripe_account_id: account.id,
+        stripe_onboarding_complete: false,
+        status: 'pending_verification',
+      } as any);
+
+      // Track event
+      posthogService.capture(merchantId, 'stripe_custom_account_created', {
+        account_id: account.id,
+        country,
+      });
+
+      return account.id;
+    } catch (error) {
+      console.error('Error creating custom account:', error);
+      throw new AppError('Failed to create Stripe account', 500, 'STRIPE_CREATE_ERROR');
+    }
+  }
+
+  /**
+   * Process a deferred payment (Platform holds funds)
+   */
+  async processDeferredPayment(
+    merchantId: string,
+    amount: number,
+    currency: string,
+    paymentMethodId: string
+  ): Promise<Stripe.PaymentIntent> {
+    // Create PaymentIntent on Platform
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+      payment_method: paymentMethodId,
+      confirm: true,
+      return_url: `${process.env.FRONTEND_URL}/payment/success`, // Example
+      metadata: {
+        merchant_id: merchantId,
+        type: 'deferred_payment',
+      },
+    });
+
+    // Track event
+    posthogService.capture(merchantId, 'deferred_payment_processed', {
+      amount,
+      currency,
+      payment_intent_id: paymentIntent.id,
+    });
+
+    return paymentIntent;
+  }
+
+  /**
+   * Transfer available funds to connected account
+   */
+  async transferFunds(merchantId: string): Promise<string> {
+    const merchant = await db.findById<Merchant>('merchants', merchantId);
+    if (!merchant || !merchant.stripe_account_id) {
+      throw new AppError('Merchant or Stripe account not found', 404, 'NOT_FOUND');
+    }
+
+    if (!merchant.stripe_charges_enabled || !merchant.stripe_payouts_enabled) {
+      throw new AppError('Account not fully verified', 400, 'ACCOUNT_NOT_VERIFIED');
+    }
+
+    const balance = await ledgerService.getBalance(merchantId);
+    if (balance.available <= 0) {
+      throw new AppError('No available funds to transfer', 400, 'INSUFFICIENT_FUNDS');
+    }
+
+    // Create Transfer
+    const transfer = await stripe.transfers.create({
+      amount: balance.available,
+      currency: balance.currency,
+      destination: merchant.stripe_account_id,
+      metadata: {
+        merchant_id: merchantId,
+        type: 'payout',
+      },
+    });
+
+    // Debit Ledger
+    await ledgerService.addEntry(
+      merchantId,
+      'debit',
+      balance.available,
+      balance.currency,
+      `Payout to Stripe Account ${merchant.stripe_account_id}`,
+      'available',
+      { transfer_id: transfer.id }
+    );
+
+    // Track event
+    posthogService.capture(merchantId, 'payout_initiated', {
+      amount: balance.available,
+      currency: balance.currency,
+      transfer_id: transfer.id,
+    });
+
+    return transfer.id;
   }
 }
 

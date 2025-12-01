@@ -104,7 +104,7 @@ export default function SignupPage() {
         {/* Logo */}
         <div className="mb-12">
           <h1 className="text-2xl font-semibold text-foreground mb-1">
-            NeuraPay
+            Neura Finance
           </h1>
         </div>
 

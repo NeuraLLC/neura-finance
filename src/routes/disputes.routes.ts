@@ -1,9 +1,15 @@
-const express = require('express');
+import express, { Request, Response } from 'express';
+import disputesService from '../services/disputes.service';
+import { authenticateJWT } from '../middleware/auth';
+import { asyncHandler } from '../middleware/errorHandler';
+import upload from '../middleware/upload';
+
 const router = express.Router();
-const disputesService = require('../services/disputes.service').default;
-const { authenticateJWT } = require('../middleware/auth');
-const { asyncHandler } = require('../middleware/errorHandler');
-const upload = require('../middleware/upload').default;
+
+interface AuthenticatedRequest extends Request {
+  user?: any;
+  merchant?: any; // In case it uses req.merchant instead of req.user
+}
 
 /**
  * @route   GET /api/merchants/:merchantId/disputes
@@ -13,12 +19,16 @@ const upload = require('../middleware/upload').default;
 router.get(
   '/:merchantId/disputes',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { merchantId } = req.params;
     const { status, reason, limit = 20, offset = 0 } = req.query;
 
     // Verify merchant has access
-    if (req.user.merchantId !== merchantId && req.user.role !== 'admin') {
+    // Note: Checking both req.user and req.merchant for compatibility
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
+    if (userMerchantId !== merchantId && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -29,10 +39,10 @@ router.get(
     }
 
     const result = await disputesService.getDisputesByMerchant(merchantId, {
-      status,
-      reason,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
+      status: status as string,
+      reason: reason as string,
+      limit: parseInt(limit as string),
+      offset: parseInt(offset as string),
     });
 
     res.json({
@@ -40,8 +50,8 @@ router.get(
       data: {
         disputes: result.disputes,
         total: result.total,
-        limit: parseInt(limit),
-        offset: parseInt(offset),
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string),
       },
     });
   })
@@ -55,13 +65,16 @@ router.get(
 router.get(
   '/:disputeId',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -86,14 +99,17 @@ router.get(
 router.post(
   '/:disputeId/evidence',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
     const evidenceData = req.body;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -121,13 +137,16 @@ router.post(
 router.get(
   '/:disputeId/evidence',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -154,14 +173,17 @@ router.get(
 router.post(
   '/:disputeId/evidence/upload',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
     const { evidence_type, file_url, file_name, file_size, mime_type, description } = req.body;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -191,7 +213,7 @@ router.post(
         mime_type,
         description,
       },
-      req.user.merchantId
+      userMerchantId
     );
 
     res.json({
@@ -211,10 +233,10 @@ router.post(
   '/:disputeId/upload',
   authenticateJWT,
   upload.array('files', 5), // Accept up to 5 files with field name 'files'
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
     const { evidence_type, description, supabase_url } = req.body;
-    const files = req.files;
+    const files = req.files as Express.Multer.File[];
 
     if (!files || files.length === 0) {
       return res.status(400).json({
@@ -228,8 +250,11 @@ router.post(
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -263,7 +288,7 @@ router.post(
           supabaseUrl: supabase_url || `temp://${file.originalname}`, // Supabase URL should be provided from frontend
           description: description,
         },
-        req.user.merchantId
+        userMerchantId
       );
 
       uploadResults.push(result);
@@ -285,13 +310,16 @@ router.post(
 router.post(
   '/:disputeId/accept',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -319,14 +347,17 @@ router.post(
 router.put(
   '/:disputeId/notes',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { disputeId } = req.params;
     const { notes } = req.body;
 
     const dispute = await disputesService.getDisputeById(disputeId);
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== dispute.merchant_id && req.user.role !== 'admin') {
+    if (userMerchantId !== dispute.merchant_id && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -364,11 +395,14 @@ router.put(
 router.get(
   '/:merchantId/disputes/stats',
   authenticateJWT,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { merchantId } = req.params;
 
+    const userMerchantId = req.user?.merchantId || req.merchant?.id;
+    const userRole = req.user?.role;
+
     // Verify merchant has access
-    if (req.user.merchantId !== merchantId && req.user.role !== 'admin') {
+    if (userMerchantId !== merchantId && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
         error: {
@@ -387,4 +421,4 @@ router.get(
   })
 );
 
-module.exports = router;
+export default router;

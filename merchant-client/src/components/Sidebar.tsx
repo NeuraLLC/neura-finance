@@ -75,7 +75,7 @@ export default function Sidebar() {
     <div className="flex flex-col h-screen w-64 bg-card border-r border-border">
       {/* Logo */}
       <div className="flex items-center h-16 px-6 border-b border-border">
-        <h1 className="text-xl font-semibold text-primary">NeuraPay</h1>
+        <h1 className="text-xl font-semibold text-primary">Neura Finance</h1>
       </div>
 
       {/* Navigation */}

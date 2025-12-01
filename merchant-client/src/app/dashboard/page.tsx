@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { formatCurrency, formatRelativeTime, getStatusBadgeClass } from '@/lib/utils'
 import type { Transaction } from '@/types'
 import OnboardingBanner from '@/components/OnboardingBanner'
+import BalanceCard from '@/components/BalanceCard'
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -74,6 +75,9 @@ export default function DashboardPage() {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Balance Card (Replaces Pending Card) */}
+        <BalanceCard />
+
         {/* Total Revenue */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
@@ -119,22 +123,6 @@ export default function DashboardPage() {
           </div>
           <p className="text-sm text-success mt-2">
             +2.4% from last month
-          </p>
-        </div>
-
-        {/* Pending */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-secondary">Pending</h3>
-            <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <div className="text-3xl font-semibold text-foreground">
-            {formatCurrency(stats.pendingAmount, 'USD')}
-          </div>
-          <p className="text-sm text-secondary mt-2">
-            Processing payments
           </p>
         </div>
       </div>

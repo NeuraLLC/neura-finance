@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { useRouter } from 'next/navigation'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'
 
@@ -27,6 +28,7 @@ interface MerchantSettings {
 }
 
 export default function SettingsPage() {
+  const router = useRouter()
   const [stripeStatus, setStripeStatus] = useState<StripeConnectStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -145,12 +147,7 @@ export default function SettingsPage() {
   }
 
   const handleConnectStripe = async () => {
-    try {
-      const { url } = await api.getStripeConnectUrl()
-      window.location.href = url
-    } catch (error) {
-      console.error('Failed to get Stripe URL:', error)
-    }
+    router.push('/onboarding')
   }
 
   const handleOpenDashboard = async () => {
@@ -422,7 +419,7 @@ export default function SettingsPage() {
               />
             </svg>
             <h3 className="text-lg font-medium text-foreground mb-2">
-              Connect to Stripe
+              Setup Payout Account
             </h3>
             <p className="text-secondary text-sm mb-6 max-w-md mx-auto">
               You need to connect your Stripe account to start accepting payments.
@@ -437,7 +434,7 @@ export default function SettingsPage() {
                   d="M13 10V3L4 14h7v7l9-11h-7z"
                 />
               </svg>
-              Connect Stripe Account
+              Setup Account
             </button>
           </div>
         ) : (

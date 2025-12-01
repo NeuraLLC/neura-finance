@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
-export const metadata: Metadata = {
-  title: 'NeuraPay - Merchant Dashboard',
+const metadata: Metadata = {
+  title: 'Neura Finance - Merchant Dashboard',
   description: 'Accept payments, manage transactions, and grow your business',
 }
 
@@ -13,6 +13,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script src="https://js.stripe.com/v3/" async></script>
+      </head>
       <body>{children}</body>
     </html>
   )

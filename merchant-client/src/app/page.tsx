@@ -72,7 +72,7 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="mb-12">
           <h1 className="text-2xl font-semibold text-foreground mb-1">
-            NeuraPay
+            Neura Finance
           </h1>
         </div>
 
@@ -82,7 +82,7 @@ export default function LoginPage() {
             Welcome back
           </h2>
           <p className="text-secondary text-sm mb-8">
-            Enter the email associated with your NeuraPay Business account
+            Enter the email associated with your Neura Finance Business account
           </p>
 
           {error && (

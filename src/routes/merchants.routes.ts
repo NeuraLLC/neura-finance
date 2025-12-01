@@ -1,10 +1,15 @@
-const express = require('express');
-const router = express.Router();
-const merchantsService = require('../services/merchants.service').default;
-const { authenticateJWT } = require('../middleware/auth');
-const { asyncHandler } = require('../middleware/errorHandler');
+import express, { Request, Response } from 'express';
+import merchantsService from '../services/merchants.service';
+import { authenticateJWT } from '../middleware/auth';
+import { asyncHandler } from '../middleware/errorHandler';
 
-router.get('/:id', authenticateJWT, asyncHandler(async (req, res) => {
+const router = express.Router();
+
+interface AuthenticatedRequest extends Request {
+  merchant?: any;
+}
+
+router.get('/:id', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own merchant data' }});
@@ -13,7 +18,7 @@ router.get('/:id', authenticateJWT, asyncHandler(async (req, res) => {
   res.json({ success: true, data: { merchant } });
 }));
 
-router.patch('/:id/environment', authenticateJWT, asyncHandler(async (req, res) => {
+router.patch('/:id/environment', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { environment } = req.body;
   if (req.merchant.id !== id) {
@@ -26,7 +31,7 @@ router.patch('/:id/environment', authenticateJWT, asyncHandler(async (req, res) 
   res.json({ success: true, data: result });
 }));
 
-router.patch('/:id/webhook', authenticateJWT, asyncHandler(async (req, res) => {
+router.patch('/:id/webhook', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { webhook_url } = req.body;
   if (req.merchant.id !== id) {
@@ -39,7 +44,7 @@ router.patch('/:id/webhook', authenticateJWT, asyncHandler(async (req, res) => {
   res.json({ success: true, data: result });
 }));
 
-router.get('/:id/stats', authenticateJWT, asyncHandler(async (req, res) => {
+router.get('/:id/stats', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own merchant data' }});
@@ -48,7 +53,7 @@ router.get('/:id/stats', authenticateJWT, asyncHandler(async (req, res) => {
   res.json({ success: true, data: stats });
 }));
 
-router.patch('/:id', authenticateJWT, asyncHandler(async (req, res) => {
+router.patch('/:id', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   if (req.merchant.id !== id) {
     return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only update your own merchant data' }});
@@ -57,4 +62,4 @@ router.patch('/:id', authenticateJWT, asyncHandler(async (req, res) => {
   res.json({ success: true, data: { merchant } });
 }));
 
-module.exports = router;
+export default router;

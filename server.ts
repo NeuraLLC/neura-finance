@@ -1,23 +1,49 @@
 import 'dotenv/config';
 import express, { Request, Response, Application } from 'express';
+import * as Sentry from '@sentry/node';
+import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import helmet from 'helmet';
 import cors from 'cors';
 import { errorHandler } from './src/middleware/errorHandler';
 import { requestLogger } from './src/middleware/logger';
+import { posthogMiddleware } from './src/middleware/posthog';
 
 import { ddosMiddleware, ddosProtection } from './src/middleware/ddosProtection';
 import { burstMiddleware, burstDetection } from './src/middleware/burstDetection';
 import { advancedRateLimiting } from './src/middleware/advancedRateLimiting';
 
-const authRoutes = require('./src/routes/auth.routes');
-const merchantRoutes = require('./src/routes/merchants.routes');
-const paymentRoutes = require('./src/routes/payments.routes');
-const stripeConnectRoutes = require('./src/routes/stripeConnect.routes');
-const webhookRoutes = require('./src/routes/webhooks.routes');
-const disputeRoutes = require('./src/routes/disputes.routes');
+const authRoutes = require('./src/routes/auth.routes').default;
+const merchantRoutes = require('./src/routes/merchants.routes').default;
+const paymentRoutes = require('./src/routes/payments.routes').default;
+const stripeConnectRoutes = require('./src/routes/stripeConnect.routes').default;
+const webhookRoutes = require('./src/routes/webhooks.routes').default;
+const disputeRoutes = require('./src/routes/disputes.routes').default;
+const utilsRoutes = require('./src/routes/utils.routes').default;
 
 const app: Application = express();
+
+// Initialize Sentry
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  integrations: [
+    // enable HTTP calls tracing
+    new Sentry.Integrations.Http({ tracing: true }),
+    // enable Express.js middleware tracing
+    new Sentry.Integrations.Express({ app }),
+    nodeProfilingIntegration(),
+  ],
+  // Performance Monitoring
+  tracesSampleRate: 1.0, // Capture 100% of the transactions
+  // Set sampling rate for profiling - this is relative to tracesSampleRate
+  profilesSampleRate: 1.0,
+});
 const PORT = process.env.PORT || 3000;
+
+// The request handler must be the first middleware on the app
+app.use(Sentry.Handlers.requestHandler());
+
+// TracingHandler creates a trace for every incoming request
+app.use(Sentry.Handlers.tracingHandler());
 
 // 1. Security headers first
 app.use(helmet({
@@ -66,6 +92,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 
 app.use(requestLogger);
+app.use(posthogMiddleware);
 
 
 // Serve static files from public directory
@@ -161,6 +188,9 @@ app.use('/stripe-connect', stripeConnectRoutes);
 // Webhook routes (permissive rate limiting for external services)
 app.use('/webhooks', advancedRateLimiting.webhookLimiter, webhookRoutes);
 
+// Utility routes (public, for client IP, etc.)
+app.use('/utils', utilsRoutes);
+
 // ==============================================
 // ERROR HANDLING
 // ==============================================
@@ -175,6 +205,9 @@ app.use((req: Request, res: Response) => {
     },
   });
 });
+
+// The error handler must be registered before any other error middleware and after all controllers
+app.use(Sentry.Handlers.errorHandler());
 
 // Global error handling middleware (must be last)
 app.use(errorHandler);
@@ -229,13 +262,16 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
   console.error('L Unhandled Rejection at:', promise, 'reason:', reason);
-  // In production, you might want to log to Sentry here
+  Sentry.captureException(reason);
 });
 
 process.on('uncaughtException', (error: Error) => {
   console.error('L Uncaught Exception:', error);
-  // In production, you might want to log to Sentry here
-  gracefulShutdown('UNCAUGHT_EXCEPTION');
+  Sentry.captureException(error);
+  // Give Sentry time to flush before exiting
+  setTimeout(() => {
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
+  }, 2000);
 });
 
 export default app;

@@ -9,20 +9,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Black primary with modern accents
-        background: '#000000', // Pure black
-        foreground: '#ffffff',
-        primary: '#000000', // Black primary
-        secondary: '#8b8b8b', // Muted gray
-        accent: '#4285f4', // Bright blue for links/actions
-        success: '#30d158',
-        warning: '#ff9f0a',
-        error: '#ff3b30',
-        card: '#1a1a1a', // Dark gray for cards
-        'card-hover': '#2a2a2a', // Slightly lighter on hover
-        border: '#2a2a2a', // Subtle border color
-        input: '#1a1a1a', // Input background
-        'input-border': '#333333',
+        // Dark Mode Theme
+        background: '#000000', // Black background
+        foreground: '#ffffff', // White text
+        primary: '#ffffff', // White primary
+        secondary: '#86868b', // Gray for secondary text
+        accent: '#0a84ff', // Bright blue for accents
+        success: '#34c759', // Green
+        warning: '#ff9f0a', // Orange
+        error: '#ff3b30', // Red
+        card: '#1c1c1e', // Dark gray for cards
+        'card-hover': '#2c2c2e', // Slightly lighter on hover
+        border: '#38383a', // Dark border
+        input: '#1c1c1e', // Dark input background
+        'input-border': '#38383a', // Dark input border
       },
       fontFamily: {
         // Modern sans-serif stack
@@ -58,9 +58,9 @@ const config: Config = {
         'card': '1rem', // Card border radius
       },
       boxShadow: {
-        'apple': '0 2px 16px rgba(0, 0, 0, 0.08)',
-        'apple-lg': '0 4px 24px rgba(0, 0, 0, 0.12)',
-        'apple-xl': '0 8px 40px rgba(0, 0, 0, 0.16)',
+        'apple': '0 2px 16px rgba(0, 0, 0, 0.3)',
+        'apple-lg': '0 4px 24px rgba(0, 0, 0, 0.4)',
+        'apple-xl': '0 8px 40px rgba(0, 0, 0, 0.5)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',
