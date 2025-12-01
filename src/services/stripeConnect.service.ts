@@ -3,18 +3,11 @@ import db from './database.service';
 import ledgerService from './ledger.service';
 import posthogService from './posthog.service';
 import { AppError } from '../middleware/errorHandler';
+import { Merchant } from './merchants.service';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-12-18.acacia' as any,
 });
-
-interface Merchant {
-  id: string;
-  stripe_account_id?: string;
-  status: string;
-  stripe_charges_enabled?: boolean;
-  stripe_payouts_enabled?: boolean;
-}
 
 interface OAuthTokenResponse {
   stripe_user_id: string;
@@ -293,7 +286,7 @@ class StripeConnectService {
     }
   }
   /**
-   * Create a Custom Stripe Account (White-Label)
+   * Create a Custom Stripe Account (White-Label) for Deferred Onboarding
    */
   async createCustomAccount(merchantId: string, email: string, country: string = 'US'): Promise<string> {
     try {
@@ -308,24 +301,32 @@ class StripeConnectService {
         settings: {
           payouts: {
             schedule: {
-              interval: 'manual',
+              interval: 'manual', // Hold funds until onboarding complete
             },
           },
         },
         business_type: 'company',
+        metadata: {
+          onboarding_type: 'deferred',
+          merchant_id: merchantId,
+        },
       });
 
-      // Update merchant record
+      // Update merchant record with active status for deferred onboarding
       await db.update<Merchant>('merchants', merchantId, {
         stripe_account_id: account.id,
         stripe_onboarding_complete: false,
-        status: 'pending_verification',
+        stripe_charges_enabled: false,
+        stripe_payouts_enabled: false,
+        status: 'active', // KEY CHANGE: Active immediately for deferred onboarding
+        deferred_onboarding_enabled: true,
       } as any);
 
       // Track event
       posthogService.capture(merchantId, 'stripe_custom_account_created', {
         account_id: account.id,
         country,
+        onboarding_type: 'deferred',
       });
 
       return account.id;
@@ -337,31 +338,68 @@ class StripeConnectService {
 
   /**
    * Process a deferred payment (Platform holds funds)
+   * Payment is held on platform account until merchant completes onboarding
    */
   async processDeferredPayment(
     merchantId: string,
     amount: number,
     currency: string,
-    paymentMethodId: string
+    paymentMethodId: string,
+    description?: string
   ): Promise<Stripe.PaymentIntent> {
-    // Create PaymentIntent on Platform
+    const merchant = await db.findById<Merchant>('merchants', merchantId);
+    if (!merchant) {
+      throw new AppError('Merchant not found', 404, 'NOT_FOUND');
+    }
+
+    // Create PaymentIntent on Platform (NOT on connected account)
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
       payment_method: paymentMethodId,
       confirm: true,
-      return_url: `${process.env.FRONTEND_URL}/payment/success`, // Example
+      return_url: `${process.env.FRONTEND_URL}/payment/success`,
+      description: description || 'Payment',
       metadata: {
         merchant_id: merchantId,
         type: 'deferred_payment',
+        payment_type: 'platform_held', // Important for webhook processing
       },
     });
+
+    // Track in ledger as PENDING (not available until onboarding complete)
+    await ledgerService.addEntry(
+      merchantId,
+      'credit',
+      amount,
+      currency,
+      `Deferred payment ${paymentIntent.id}`,
+      'pending', // KEY: Status is pending
+      {
+        payment_intent_id: paymentIntent.id,
+        type: 'deferred_payment',
+      }
+    );
+
+    // Update earnings count and first payment timestamp
+    const updates: any = {
+      earnings_count: (merchant.earnings_count || 0) + 1,
+    };
+
+    // Set first payment timestamp if this is the first payment
+    if (!merchant.first_payment_at) {
+      updates.first_payment_at = new Date().toISOString();
+    }
+
+    await db.update<Merchant>('merchants', merchantId, updates as any);
 
     // Track event
     posthogService.capture(merchantId, 'deferred_payment_processed', {
       amount,
       currency,
       payment_intent_id: paymentIntent.id,
+      earnings_count: updates.earnings_count,
+      is_first_payment: !merchant.first_payment_at,
     });
 
     return paymentIntent;

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import db from './database.service';
 import { AppError } from '../middleware/errorHandler';
 
-interface Merchant {
+export interface Merchant {
   id: string;
   business_name: string;
   business_email: string;
@@ -27,6 +27,19 @@ interface Merchant {
   brand_name?: string;
   created_at?: string;
   updated_at?: string;
+  // OAuth fields
+  oauth_provider?: string;
+  oauth_user_id?: string;
+  // Deferred onboarding fields
+  deferred_onboarding_enabled?: boolean;
+  onboarding_notification_sent?: boolean;
+  onboarding_notification_count?: number;
+  last_onboarding_notification_at?: string;
+  earnings_count?: number;
+  first_payment_at?: string;
+  country?: string;
+  pending_balance?: number;
+  balance?: number;
 }
 
 interface Transaction {

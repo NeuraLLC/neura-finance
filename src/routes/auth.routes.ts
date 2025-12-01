@@ -10,14 +10,24 @@ interface AuthenticatedRequest extends Request {
 }
 
 router.post('/signup', asyncHandler(async (req: Request, res: Response) => {
-  const { business_name, business_email, password, business_type } = req.body;
+  const { business_name, business_email, password, business_type, country } = req.body;
   if (!business_name || !business_email || !password) {
     return res.status(400).json({
       success: false,
       error: { code: 'VALIDATION_ERROR', message: 'business_name, business_email, and password are required' }
     });
   }
-  const result = await authService.signup(business_name, business_email, password, business_type);
+
+  // Validate country code if provided
+  const validCountries = ['US', 'GB', 'DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'IE', 'PT'];
+  if (country && !validCountries.includes(country)) {
+    return res.status(400).json({
+      success: false,
+      error: { code: 'VALIDATION_ERROR', message: 'Invalid country code' }
+    });
+  }
+
+  const result = await authService.signup(business_name, business_email, password, business_type, country || 'US');
   res.status(201).json({ success: true, data: result });
 }));
 

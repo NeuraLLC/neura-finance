@@ -3,27 +3,8 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from './database.service';
 import { AppError } from '../middleware/errorHandler';
-
-interface Merchant {
-  id: string;
-  business_name: string;
-  business_email: string;
-  business_type: string | null;
-  password: string;
-  api_key: string;
-  api_secret: string;
-  sandbox_api_key?: string;
-  oauth_provider?: string;
-  oauth_user_id?: string;
-  status: string;
-  environment: string;
-  stripe_onboarding_complete?: boolean;
-  stripe_charges_enabled?: boolean;
-  stripe_payouts_enabled?: boolean;
-  webhook_url?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+import { Merchant } from './merchants.service';
+import stripeConnectService from './stripeConnect.service';
 
 interface TokenPayload {
   merchantId: string;
@@ -114,13 +95,14 @@ class AuthService {
   }
 
   /**
-   * Sign up new merchant
+   * Sign up new merchant with deferred onboarding
    */
   async signup(
     businessName: string,
     businessEmail: string,
     password: string,
-    businessType: string | null = null
+    businessType: string | null = null,
+    country: string = 'US'
   ): Promise<SignupResponse> {
     // Check if merchant already exists
     const existingMerchant = await db.findOne<Merchant>('merchants', {
@@ -139,7 +121,24 @@ class AuthService {
     const apiSecret = crypto.randomBytes(32).toString('hex');
     const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
 
-    // Create merchant
+    // Map country to currency
+    const currencyMap: Record<string, string> = {
+      'US': 'usd',
+      'GB': 'gbp',
+      'DE': 'eur',
+      'FR': 'eur',
+      'IT': 'eur',
+      'ES': 'eur',
+      'NL': 'eur',
+      'BE': 'eur',
+      'AT': 'eur',
+      'IE': 'eur',
+      'PT': 'eur',
+    };
+
+    const defaultCurrency = currencyMap[country] || 'usd';
+
+    // Create merchant with active status for deferred onboarding
     const merchant = await db.insert<Merchant>('merchants', {
       business_name: businessName,
       business_email: businessEmail,
@@ -147,9 +146,26 @@ class AuthService {
       password: hashedPassword,
       api_key: apiKey,
       api_secret: apiSecretHash,
-      status: 'pending_verification',
+      status: 'active', // KEY CHANGE: Active immediately
       environment: 'sandbox',
+      country,
+      default_currency: defaultCurrency,
+      deferred_onboarding_enabled: true,
     });
+
+    // Create Stripe account immediately (non-blocking)
+    try {
+      await stripeConnectService.createCustomAccount(
+        merchant.id,
+        businessEmail,
+        country
+      );
+      console.log('Stripe account created successfully during signup');
+    } catch (error) {
+      // Don't fail signup if Stripe account creation fails
+      // User can set it up later via onboarding page
+      console.error('Failed to create Stripe account during signup:', error);
+    }
 
     // Generate JWT
     const accessToken = this.generateToken(merchant.id, merchant.business_email);
