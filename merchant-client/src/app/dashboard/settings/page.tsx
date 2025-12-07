@@ -59,7 +59,8 @@ export default function SettingsPage() {
       })
 
       if (response.ok) {
-        const merchant = await response.json()
+        const data = await response.json()
+        const merchant = data.data.merchant
         setWebhookUrl(merchant.webhook_url || '')
         setWebhookSecret(merchant.webhook_secret || '')
         setEnvironment(merchant.environment || 'sandbox')
@@ -147,7 +148,29 @@ export default function SettingsPage() {
   }
 
   const handleConnectStripe = async () => {
-    router.push('/onboarding')
+    try {
+      setSaving(true)
+      const response = await fetch(`${API_URL}/stripe-connect/account-link`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.data.url) {
+        window.location.href = data.data.url
+      } else {
+        throw new Error('Failed to generate verification link')
+      }
+    } catch (error) {
+      console.error('Failed to start verification:', error)
+      setError('Failed to start verification process. Please try again.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleOpenDashboard = async () => {
@@ -386,19 +409,21 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Stripe Connect Section */}
+      {/* Payout Account Section */}
       <div className="card">
         <div className="flex items-start justify-between mb-6">
           <div>
             <h2 className="text-xl font-semibold text-foreground mb-2">
-              Stripe Connect
+              Payout Account
             </h2>
             <p className="text-sm text-secondary">
-              Connect your Stripe account to start receiving payments
+              Setup your account verification to receive payouts
             </p>
           </div>
           {stripeStatus?.connected && (
-            <span className="badge-success">Connected</span>
+            <span className="badge-success">
+              {stripeStatus.charges_enabled && stripeStatus.payouts_enabled ? 'Verified' : 'Pending'}
+            </span>
           )}
         </div>
 
@@ -415,15 +440,15 @@ export default function SettingsPage() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
+                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
             <h3 className="text-lg font-medium text-foreground mb-2">
-              Setup Payout Account
+              Complete Account Verification
             </h3>
             <p className="text-secondary text-sm mb-6 max-w-md mx-auto">
-              You need to connect your Stripe account to start accepting payments.
-              This process takes less than 5 minutes.
+              To receive payouts from your customers, you'll need to complete account verification.
+              This is a one-time process that takes about 5 minutes.
             </p>
             <button onClick={handleConnectStripe} className="btn-primary">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,20 +456,58 @@ export default function SettingsPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              Setup Account
+              Complete Verification
             </button>
           </div>
         ) : (
           /* Connected */
           <div className="space-y-4">
-            {/* Status Cards */}
+            {/* Verification Status */}
+            <div className="bg-muted/30 border border-border rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                {stripeStatus.charges_enabled && stripeStatus.payouts_enabled ? (
+                  <>
+                    <div className="w-10 h-10 bg-success/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground mb-1">Account Verified</h3>
+                      <p className="text-sm text-secondary">
+                        Your account is fully verified. You can accept payments and receive payouts.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 bg-warning/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-foreground mb-1">Verification In Progress</h3>
+                      <p className="text-sm text-secondary mb-3">
+                        Complete your account verification to start receiving payouts.
+                      </p>
+                      <button onClick={handleConnectStripe} className="btn-primary text-sm">
+                        Complete Verification
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Capabilities Status */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-card rounded-xl p-4 border border-border">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-secondary">Charges</span>
+                  <span className="text-sm text-secondary">Accept Payments</span>
                   {stripeStatus.charges_enabled ? (
                     <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -456,13 +519,13 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <p className={`text-lg font-semibold ${stripeStatus.charges_enabled ? 'text-success' : 'text-error'}`}>
-                  {stripeStatus.charges_enabled ? 'Enabled' : 'Disabled'}
+                  {stripeStatus.charges_enabled ? 'Active' : 'Inactive'}
                 </p>
               </div>
 
               <div className="bg-card rounded-xl p-4 border border-border">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-secondary">Payouts</span>
+                  <span className="text-sm text-secondary">Receive Payouts</span>
                   {stripeStatus.payouts_enabled ? (
                     <svg className="w-5 h-5 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -474,31 +537,32 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <p className={`text-lg font-semibold ${stripeStatus.payouts_enabled ? 'text-success' : 'text-error'}`}>
-                  {stripeStatus.payouts_enabled ? 'Enabled' : 'Disabled'}
+                  {stripeStatus.payouts_enabled ? 'Active' : 'Inactive'}
                 </p>
               </div>
             </div>
 
-            {/* Dashboard Link */}
-            <div className="pt-4">
-              <button onClick={handleOpenDashboard} className="btn-accent w-full">
+            {/* Account Management */}
+            {/* <div className="pt-4">
+              <button onClick={handleOpenDashboard} className="btn-secondary w-full">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
                   />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Open Stripe Dashboard
+                Manage Payout Settings
               </button>
-            </div>
+            </div> */}
           </div>
         )}
       </div>
 
       {/* Danger Zone */}
-      <div className="card border-error/20">
+      {/* <div className="card border-error/20">
         <h2 className="text-xl font-semibold text-error mb-2">
           Danger Zone
         </h2>
@@ -514,7 +578,7 @@ export default function SettingsPage() {
             Deactivate Account
           </button>
         </div>
-      </div>
+      </div> */}
     </div>
   )
 }

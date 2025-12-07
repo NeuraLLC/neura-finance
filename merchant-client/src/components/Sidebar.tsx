@@ -66,6 +66,7 @@ const navigation = [
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [userInfo, setUserInfo] = useState({
     name: 'Merchant',
     email: 'merchant@example.com'
@@ -84,10 +85,28 @@ export default function Sidebar() {
   }
 
   return (
-    <div className="flex flex-col h-screen w-64 bg-card border-r border-border">
-      {/* Logo */}
-      <div className="flex items-center h-16 px-6 border-b border-border">
-        <h1 className="text-xl font-semibold text-primary">Neura Finance</h1>
+    <div className={cn(
+      'flex flex-col h-screen bg-card border-r border-border transition-all duration-300',
+      isCollapsed ? 'w-20' : 'w-64'
+    )}>
+      {/* Logo and Toggle */}
+      <div className="flex items-center justify-between h-16 px-6 border-b border-border">
+        {!isCollapsed && (
+          <h1 className="text-xl font-semibold text-primary">Neura Finance</h1>
+        )}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-2 hover:bg-border/50 rounded-apple transition-all duration-200"
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <svg className="w-5 h-5 text-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {isCollapsed ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            )}
+          </svg>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -101,14 +120,16 @@ export default function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-apple text-sm font-medium transition-all duration-200',
+                'flex items-center gap-3 py-2.5 rounded-apple text-sm font-medium transition-all duration-200',
+                isCollapsed ? 'px-3 justify-center' : 'px-3',
                 isActive
-                  ? 'bg-primary text-white'
+                  ? 'bg-foreground text-background'
                   : 'text-foreground hover:bg-border/50'
               )}
+              title={isCollapsed ? item.name : undefined}
             >
               {item.icon}
-              <span>{item.name}</span>
+              {!isCollapsed && <span>{item.name}</span>}
             </Link>
           )
         })}
@@ -116,25 +137,44 @@ export default function Sidebar() {
 
       {/* User section */}
       <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
-            {userInfo.email[0].toUpperCase()}
+        {!isCollapsed ? (
+          <>
+            <div className="flex items-center gap-3 px-3 py-2 mb-2">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
+                {userInfo.email[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {userInfo.name}
+                </p>
+                <p className="text-xs text-secondary truncate">
+                  {userInfo.email}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full px-3 py-2 text-sm text-secondary hover:text-foreground hover:bg-border/50 rounded-apple transition-all duration-200"
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-medium">
+              {userInfo.email[0].toUpperCase()}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-border/50 rounded-apple transition-all duration-200"
+              title="Sign out"
+            >
+              <svg className="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {userInfo.name}
-            </p>
-            <p className="text-xs text-secondary truncate">
-              {userInfo.email}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="w-full px-3 py-2 text-sm text-secondary hover:text-foreground hover:bg-border/50 rounded-apple transition-all duration-200"
-        >
-          Sign out
-        </button>
+        )}
       </div>
     </div>
   )

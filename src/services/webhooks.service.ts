@@ -4,6 +4,8 @@ import db from './database.service';
 import disputesService from './disputes.service';
 import ledgerService from './ledger.service';
 import posthogService from './posthog.service';
+import emailService from './email.service';
+import notificationService from './notification.service';
 import { AppError } from '../middleware/errorHandler';
 import { Merchant } from './merchants.service';
 
@@ -300,7 +302,7 @@ class WebhooksService {
   }
 
   /**
-   * Handle Stripe Connect account updated (with deferred onboarding support)
+   * Handle Stripe Connect account updated
    */
   private async handleAccountUpdated(account: Stripe.Account): Promise<void> {
     // Find merchant by Stripe account ID
@@ -314,103 +316,39 @@ class WebhooksService {
     }
 
     // Check if merchant just became verified (transition from unverified to verified)
-    const wasNotVerified = !merchant.stripe_charges_enabled || !merchant.stripe_payouts_enabled;
-    const isNowVerified = account.charges_enabled && account.payouts_enabled;
+    const wasNotVerified = !merchant.stripe_onboarding_complete;
+    const isNowVerified = account.charges_enabled === true && account.payouts_enabled === true;
 
     // Update merchant status
     await db.update<Merchant>('merchants', merchant.id, {
-      stripe_onboarding_complete: account.details_submitted,
-      stripe_charges_enabled: account.charges_enabled,
-      stripe_payouts_enabled: account.payouts_enabled,
+      stripe_onboarding_complete: isNowVerified,
+      stripe_charges_enabled: account.charges_enabled || false,
+      stripe_payouts_enabled: account.payouts_enabled || false,
     } as any);
 
     console.log('Stripe account updated:', merchant.id, {
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
-      details_submitted: account.details_submitted,
+      onboarding_complete: isNowVerified,
     });
 
-    // Handle deferred onboarding completion
-    if (wasNotVerified && isNowVerified && merchant.deferred_onboarding_enabled) {
-      console.log('🎉 Merchant completed deferred onboarding, releasing funds:', merchant.id);
+    // Send welcome notification if just completed onboarding
+    if (wasNotVerified && isNowVerified) {
+      console.log('🎉 Merchant completed onboarding:', merchant.id);
 
-      // Get pending balance
-      const balance = await ledgerService.getBalance(merchant.id);
+      // Track event
+      posthogService.capture(merchant.id, 'onboarding_completed', {
+        merchant_id: merchant.id,
+      });
 
-      if (balance.pending > 0) {
-        console.log(`Releasing ${balance.pending / 100} ${balance.currency} in pending funds`);
+      // Send in-app notification
+      await notificationService.createOnboardingCompletedNotification(
+        merchant.id,
+        0, // No pending amount in immediate verification flow
+        merchant.default_currency || 'usd'
+      );
 
-        // Release pending funds to available
-        await ledgerService.releaseFunds(merchant.id);
-
-        // Transfer funds to merchant account
-        try {
-          const transfer = await stripe.transfers.create({
-            amount: balance.pending,
-            currency: balance.currency,
-            destination: account.id,
-            description: `Transfer of ${(balance.pending / 100).toFixed(2)} ${balance.currency.toUpperCase()} from ${merchant.earnings_count || 0} deferred payments`,
-            metadata: {
-              merchant_id: merchant.id,
-              type: 'deferred_onboarding_completion',
-              earnings_count: String(merchant.earnings_count || 0),
-            },
-          });
-
-          console.log('✅ Successfully transferred pending funds:', {
-            transfer_id: transfer.id,
-            amount: balance.pending,
-            currency: balance.currency,
-          });
-
-          // Update payout schedule to automatic (daily)
-          await stripe.accounts.update(account.id, {
-            settings: {
-              payouts: {
-                schedule: {
-                  interval: 'daily',
-                },
-              },
-            },
-          });
-
-          console.log('✅ Updated payout schedule to daily for merchant:', merchant.id);
-
-          // Track event
-          posthogService.capture(merchant.id, 'deferred_onboarding_completed', {
-            pending_amount: balance.pending,
-            earnings_count: merchant.earnings_count,
-            transfer_id: transfer.id,
-            currency: balance.currency,
-          });
-        } catch (error) {
-          console.error('❌ Error transferring funds after onboarding:', error);
-          // TODO: Implement retry logic via failed_transfers table
-          // For now, funds remain in available balance and can be manually transferred
-        }
-      } else {
-        console.log('No pending funds to transfer for merchant:', merchant.id);
-
-        // Still update payout schedule even if no pending funds
-        try {
-          await stripe.accounts.update(account.id, {
-            settings: {
-              payouts: {
-                schedule: {
-                  interval: 'daily',
-                },
-              },
-            },
-          });
-          console.log('✅ Updated payout schedule to daily (no pending funds)');
-        } catch (error) {
-          console.error('Error updating payout schedule:', error);
-        }
-      }
-    } else if (isNowVerified && !merchant.deferred_onboarding_enabled) {
-      // Legacy flow: Just release funds without transfer
-      await ledgerService.releaseFunds(merchant.id);
-      console.log('Released funds for merchant (legacy flow):', merchant.id);
+      console.log('✅ Created welcome notification for merchant:', merchant.id);
     }
   }
 

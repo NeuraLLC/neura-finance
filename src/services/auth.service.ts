@@ -6,6 +6,7 @@ import { AppError } from '../middleware/errorHandler';
 import { Merchant } from './merchants.service';
 import stripeConnectService from './stripeConnect.service';
 import posthogService from './posthog.service';
+import emailService from './email.service';
 
 interface TokenPayload {
   merchantId: string;
@@ -26,6 +27,8 @@ interface SignupResponse {
     api_key: string;
     api_secret: string;
   };
+  onboarding_url?: string;
+  requires_onboarding: boolean;
 }
 
 interface LoginResponse {
@@ -144,7 +147,7 @@ class AuthService {
 
       const defaultCurrency = currencyMap[country] || 'usd';
 
-      // Create merchant with active status for deferred onboarding
+      // Create merchant with pending status (must complete onboarding)
       const merchant = await db.insert<Merchant>('merchants', {
         business_name: businessName,
         business_email: businessEmail,
@@ -152,24 +155,35 @@ class AuthService {
         password: hashedPassword,
         api_key: apiKey,
         api_secret: apiSecretHash,
-        status: 'active', // KEY CHANGE: Active immediately
+        status: 'active',
         environment: 'sandbox',
         country,
         default_currency: defaultCurrency,
-        deferred_onboarding_enabled: true,
+        stripe_onboarding_complete: false,
       });
 
-      // Create Stripe account immediately (non-blocking)
+      // Create Stripe Connect account and generate onboarding URL
+      let onboardingUrl: string | undefined;
       try {
+        // Create Stripe Express account
         await stripeConnectService.createCustomAccount(
           merchant.id,
           businessEmail,
           country
         );
-        console.log('Stripe account created successfully during signup');
+
+        // Generate onboarding link
+        const accountLinkResponse = await stripeConnectService.createAccountLink(
+          merchant.id,
+          'account_onboarding'
+        );
+
+        onboardingUrl = accountLinkResponse.url;
+
+        console.log('Stripe account created and onboarding URL generated');
       } catch (error) {
         // Don't fail signup if Stripe account creation fails
-        // User can set it up later via onboarding page
+        // User can set it up later via settings page
         console.error('Failed to create Stripe account during signup:', error);
       }
 
@@ -181,6 +195,12 @@ class AuthService {
         business_type: businessType,
         country,
         currency: defaultCurrency,
+      });
+
+      // Send welcome email (non-blocking)
+      emailService.sendWelcomeEmail(merchant).catch((error) => {
+        console.error('Failed to send welcome email:', error);
+        // Don't fail the signup if email fails
       });
 
       return {
@@ -197,6 +217,8 @@ class AuthService {
           api_key: apiKey,
           api_secret: apiSecret, // Only shown once
         },
+        onboarding_url: onboardingUrl,
+        requires_onboarding: true,
       };
     } catch (error) {
       if (error instanceof AppError) {

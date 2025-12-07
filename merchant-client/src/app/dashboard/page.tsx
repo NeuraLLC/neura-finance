@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { formatCurrency, formatRelativeTime, getStatusBadgeClass } from '@/lib/utils'
 import type { Transaction } from '@/types'
-import OnboardingBanner from '@/components/OnboardingBanner'
 import BalanceCard from '@/components/BalanceCard'
 
 export default function DashboardPage() {
@@ -62,9 +61,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Onboarding Banner */}
-      <OnboardingBanner />
-
+      
       {/* Header */}
       <div>
         <h1 className="text-3xl font-semibold text-foreground">Overview</h1>

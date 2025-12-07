@@ -61,7 +61,7 @@ export default function SignupPage() {
       }
 
       // Extract the actual data from the API response structure
-      const { accessToken, merchant, api_credentials } = data.data
+      const { accessToken, merchant, api_credentials, onboarding_url } = data.data
 
       // Store JWT token and merchant info
       localStorage.setItem('accessToken', accessToken)
@@ -75,11 +75,12 @@ export default function SignupPage() {
         localStorage.setItem('apiSecret', api_credentials.api_secret)
       }
 
-      // Mark as new user for onboarding
-      localStorage.setItem('isNewUser', 'true')
-
-      // Redirect to dashboard (onboarding is now optional via settings)
-      router.push('/dashboard')
+      // Redirect to Stripe onboarding if URL is provided, otherwise go to dashboard
+      if (onboarding_url) {
+        window.location.href = onboarding_url
+      } else {
+        router.push('/dashboard')
+      }
     } catch (err: any) {
       setError(err.message || 'Signup failed. Please try again.')
     } finally {
@@ -222,7 +223,7 @@ export default function SignupPage() {
               disabled={loading}
               className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating account...' : 'Continue'}
+              {loading ? 'Creating your account...' : 'Continue'}
             </button>
           </form>
 

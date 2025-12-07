@@ -286,123 +286,44 @@ class StripeConnectService {
     }
   }
   /**
-   * Create a Custom Stripe Account (White-Label) for Deferred Onboarding
+   * Create a Stripe Express Account (requires immediate onboarding)
    */
   async createCustomAccount(merchantId: string, email: string, country: string = 'US'): Promise<string> {
     try {
       const account = await stripe.accounts.create({
-        type: 'custom',
+        type: 'express', // Use Express for simpler onboarding
         country,
         email,
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        settings: {
-          payouts: {
-            schedule: {
-              interval: 'manual', // Hold funds until onboarding complete
-            },
-          },
-        },
-        business_type: 'company',
+        business_type: 'individual', // Default to individual
         metadata: {
-          onboarding_type: 'deferred',
           merchant_id: merchantId,
         },
       });
 
-      // Update merchant record with active status for deferred onboarding
+      // Update merchant record with Stripe account ID
       await db.update<Merchant>('merchants', merchantId, {
         stripe_account_id: account.id,
         stripe_onboarding_complete: false,
         stripe_charges_enabled: false,
         stripe_payouts_enabled: false,
-        status: 'active', // KEY CHANGE: Active immediately for deferred onboarding
-        deferred_onboarding_enabled: true,
       } as any);
 
       // Track event
-      posthogService.capture(merchantId, 'stripe_custom_account_created', {
+      posthogService.capture(merchantId, 'stripe_account_created', {
         account_id: account.id,
         country,
-        onboarding_type: 'deferred',
+        account_type: 'express',
       });
 
       return account.id;
     } catch (error) {
-      console.error('Error creating custom account:', error);
+      console.error('Error creating Stripe account:', error);
       throw new AppError('Failed to create Stripe account', 500, 'STRIPE_CREATE_ERROR');
     }
-  }
-
-  /**
-   * Process a deferred payment (Platform holds funds)
-   * Payment is held on platform account until merchant completes onboarding
-   */
-  async processDeferredPayment(
-    merchantId: string,
-    amount: number,
-    currency: string,
-    paymentMethodId: string,
-    description?: string
-  ): Promise<Stripe.PaymentIntent> {
-    const merchant = await db.findById<Merchant>('merchants', merchantId);
-    if (!merchant) {
-      throw new AppError('Merchant not found', 404, 'NOT_FOUND');
-    }
-
-    // Create PaymentIntent on Platform (NOT on connected account)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency,
-      payment_method: paymentMethodId,
-      confirm: true,
-      return_url: `${process.env.FRONTEND_URL}/payment/success`,
-      description: description || 'Payment',
-      metadata: {
-        merchant_id: merchantId,
-        type: 'deferred_payment',
-        payment_type: 'platform_held', // Important for webhook processing
-      },
-    });
-
-    // Track in ledger as PENDING (not available until onboarding complete)
-    await ledgerService.addEntry(
-      merchantId,
-      'credit',
-      amount,
-      currency,
-      `Deferred payment ${paymentIntent.id}`,
-      'pending', // KEY: Status is pending
-      {
-        payment_intent_id: paymentIntent.id,
-        type: 'deferred_payment',
-      }
-    );
-
-    // Update earnings count and first payment timestamp
-    const updates: any = {
-      earnings_count: (merchant.earnings_count || 0) + 1,
-    };
-
-    // Set first payment timestamp if this is the first payment
-    if (!merchant.first_payment_at) {
-      updates.first_payment_at = new Date().toISOString();
-    }
-
-    await db.update<Merchant>('merchants', merchantId, updates as any);
-
-    // Track event
-    posthogService.capture(merchantId, 'deferred_payment_processed', {
-      amount,
-      currency,
-      payment_intent_id: paymentIntent.id,
-      earnings_count: updates.earnings_count,
-      is_first_payment: !merchant.first_payment_at,
-    });
-
-    return paymentIntent;
   }
 
   /**

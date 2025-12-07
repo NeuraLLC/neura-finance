@@ -39,7 +39,7 @@ export default function OnboardingPage() {
       const merchantData = await merchantResponse.json()
 
       // If onboarding already complete, redirect to dashboard
-      if (merchantData.stripe_onboarding_complete) {
+      if (merchantData.data.merchant.stripe_onboarding_complete) {
         router.push('/dashboard')
       }
     } catch (err: any) {
@@ -159,7 +159,7 @@ export default function OnboardingPage() {
                   Complete Account Setup
                 </h3>
                 <p className="text-secondary text-base mb-2">
-                  To receive payouts, you'll need to complete your Stripe account verification.
+                  To receive payouts, you'll need to complete your account verification.
                 </p>
                 <p className="text-secondary text-sm">
                   You can skip this for now and start processing payments. You'll have 30 days to complete verification.

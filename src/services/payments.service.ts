@@ -123,18 +123,13 @@ class PaymentsService {
       throw new AppError('Stripe Connect account not configured', 400, 'STRIPE_NOT_CONFIGURED');
     }
 
-    // 30-day enforcement for deferred onboarding
-    if (merchant.deferred_onboarding_enabled && !merchant.stripe_onboarding_complete && merchant.first_payment_at) {
-      const firstPaymentDate = new Date(merchant.first_payment_at);
-      const daysSinceFirstPayment = Math.floor((Date.now() - firstPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (daysSinceFirstPayment >= 30) {
-        throw new AppError(
-          'You must complete your Stripe onboarding before processing new payments. Your 30-day grace period has ended. Please complete your onboarding in the Settings page.',
-          403,
-          'ONBOARDING_REQUIRED'
-        );
-      }
+    // Check if merchant has completed onboarding (immediate verification required)
+    if (!merchant.stripe_onboarding_complete) {
+      throw new AppError(
+        'You must complete account verification before accepting payments. Please complete verification in your Settings page.',
+        403,
+        'ONBOARDING_REQUIRED'
+      );
     }
 
     if (!merchant.stripe_charges_enabled) {
