@@ -127,8 +127,11 @@ class AuthService {
 
       // Generate API credentials
       const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
+      const sandboxApiKey = `npk_test_${crypto.randomBytes(24).toString('hex')}`;
       const apiSecret = crypto.randomBytes(32).toString('hex');
-      const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
+      const sandboxApiSecret = crypto.randomBytes(32).toString('hex');
+      // Note: Secrets are stored as plain text for HMAC verification (same as Stripe)
+      // They're only shown once during signup and must be kept secure by the merchant
 
       // Map country to currency
       const currencyMap: Record<string, string> = {
@@ -154,7 +157,9 @@ class AuthService {
         business_type: businessType,
         password: hashedPassword,
         api_key: apiKey,
-        api_secret: apiSecretHash,
+        sandbox_api_key: sandboxApiKey,
+        api_secret: apiSecret, // Production secret
+        sandbox_api_secret: sandboxApiSecret, // Sandbox secret
         status: 'active',
         environment: 'sandbox',
         country,
@@ -215,7 +220,9 @@ class AuthService {
         },
         api_credentials: {
           api_key: apiKey,
-          api_secret: apiSecret, // Only shown once
+          sandbox_api_key: sandboxApiKey,
+          api_secret: apiSecret, // Production secret - only shown once
+          sandbox_api_secret: sandboxApiSecret, // Sandbox secret - only shown once
         },
         onboarding_url: onboardingUrl,
         requires_onboarding: true,
@@ -346,8 +353,10 @@ class AuthService {
     // If still no merchant, create new one
     if (!merchant) {
       const apiKey = `npk_live_${crypto.randomBytes(24).toString('hex')}`;
+      const sandboxApiKey = `npk_test_${crypto.randomBytes(24).toString('hex')}`;
       const apiSecret = crypto.randomBytes(32).toString('hex');
-      const apiSecretHash = crypto.createHash('sha256').update(apiSecret).digest('hex');
+      const sandboxApiSecret = crypto.randomBytes(32).toString('hex');
+      // Store plain for HMAC verification (same as regular signup)
 
       // Random password for OAuth users (they won't use it)
       const randomPassword = crypto.randomBytes(32).toString('hex');
@@ -358,7 +367,9 @@ class AuthService {
         business_email: email,
         password: hashedPassword,
         api_key: apiKey,
-        api_secret: apiSecretHash,
+        sandbox_api_key: sandboxApiKey,
+        api_secret: apiSecret, // Production secret
+        sandbox_api_secret: sandboxApiSecret, // Sandbox secret
         oauth_provider: provider,
         oauth_user_id: oauthUserId,
         status: 'active', // OAuth users are auto-verified

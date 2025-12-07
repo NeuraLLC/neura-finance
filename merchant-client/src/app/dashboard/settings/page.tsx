@@ -36,6 +36,8 @@ export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [apiSecret, setApiSecret] = useState('')
+  const [showSecret, setShowSecret] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
 
@@ -64,13 +66,27 @@ export default function SettingsPage() {
         setWebhookUrl(merchant.webhook_url || '')
         setWebhookSecret(merchant.webhook_secret || '')
         setEnvironment(merchant.environment || 'sandbox')
+      }
 
-        // Set API key based on environment
-        if (merchant.environment === 'production') {
-          setApiKey(merchant.api_key || localStorage.getItem('apiKey') || '')
+      // Load API credentials (includes secret)
+      const credentialsResponse = await fetch(`${API_URL}/merchants/${merchantId}/credentials`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
+        },
+      })
+
+      if (credentialsResponse.ok) {
+        const credData = await credentialsResponse.json()
+        const credentials = credData.data
+
+        // Set API key and secret based on environment
+        if (credentials.environment === 'production') {
+          setApiKey(credentials.api_key || '')
         } else {
-          setApiKey(merchant.sandbox_api_key || merchant.api_key || localStorage.getItem('apiKey') || '')
+          setApiKey(credentials.sandbox_api_key || credentials.api_key || '')
         }
+
+        setApiSecret(credentials.api_secret || localStorage.getItem('apiSecret') || '')
       }
     } catch (error) {
       console.error('Failed to load settings:', error)
@@ -95,13 +111,17 @@ export default function SettingsPage() {
       })
 
       if (response.ok) {
-        const data = await response.json()
+        const result = await response.json()
         setEnvironment(newEnv)
-        setApiKey(newEnv === 'production' ? data.production_api_key : data.sandbox_api_key)
+        setApiKey(newEnv === 'production' ? result.data.production_api_key : result.data.sandbox_api_key)
         setSuccess('Environment switched successfully')
         setTimeout(() => setSuccess(''), 3000)
+
+        // Reload credentials to ensure we have the latest data
+        loadSettings()
       } else {
-        throw new Error('Failed to switch environment')
+        const errorData = await response.json()
+        throw new Error(errorData.error?.message || 'Failed to switch environment')
       }
     } catch (err: any) {
       setError(err.message || 'Failed to switch environment')
@@ -214,64 +234,75 @@ export default function SettingsPage() {
 
       {/* Environment Switcher */}
       <div className="card">
-        <h2 className="text-xl font-semibold text-foreground mb-2">
-          Environment
-        </h2>
-        <p className="text-sm text-secondary mb-6">
-          Switch between sandbox (test) and production modes
-        </p>
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">
+              Environment
+            </h2>
+            <p className="text-sm text-secondary">
+              {environment === 'sandbox'
+                ? 'Test mode - No real charges will be made'
+                : 'Live mode - Real charges will be processed'}
+            </p>
+          </div>
 
-        <div className="flex items-center gap-4">
+          {/* Toggle Switch */}
           <button
-            onClick={() => handleEnvironmentSwitch('sandbox')}
-            disabled={saving || environment === 'sandbox'}
-            className={`px-6 py-3 rounded-xl font-medium transition-all ${
-              environment === 'sandbox'
-                ? 'bg-accent text-white'
-                : 'bg-card text-secondary hover:bg-card-hover border border-border'
-            } disabled:opacity-50`}
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              Sandbox
-            </div>
-          </button>
-
-          <button
-            onClick={() => handleEnvironmentSwitch('production')}
-            disabled={saving || environment === 'production'}
-            className={`px-6 py-3 rounded-xl font-medium transition-all ${
+            onClick={() => handleEnvironmentSwitch(environment === 'sandbox' ? 'production' : 'sandbox')}
+            disabled={saving}
+            className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
               environment === 'production'
-                ? 'bg-success text-white'
-                : 'bg-card text-secondary hover:bg-card-hover border border-border'
+                ? 'bg-success focus:ring-success'
+                : 'bg-accent focus:ring-accent'
             } disabled:opacity-50`}
+            role="switch"
+            aria-checked={environment === 'production'}
           >
-            <div className="flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Production
-            </div>
+            <span className="sr-only">Toggle environment</span>
+            <span
+              className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition-transform ${
+                environment === 'production' ? 'translate-x-9' : 'translate-x-1'
+              }`}
+            />
           </button>
         </div>
 
-        {environment === 'sandbox' && (
-          <div className="mt-4 p-3 bg-accent/10 border border-accent/20 rounded-xl">
-            <p className="text-sm text-accent">
-              <strong>Sandbox Mode:</strong> Test transactions won't affect real money. Use test card: 4242 4242 4242 4242
-            </p>
+        {/* Environment Indicator */}
+        <div className={`p-4 rounded-xl border-2 ${
+          environment === 'sandbox'
+            ? 'bg-accent/5 border-accent/20'
+            : 'bg-success/5 border-success/20'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              environment === 'sandbox'
+                ? 'bg-accent/10'
+                : 'bg-success/10'
+            }`}>
+              <svg className={`w-5 h-5 ${
+                environment === 'sandbox' ? 'text-accent' : 'text-success'
+              }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {environment === 'sandbox' ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                )}
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className={`font-semibold ${
+                environment === 'sandbox' ? 'text-accent' : 'text-success'
+              }`}>
+                {environment === 'sandbox' ? 'Test Mode Active' : 'Live Mode Active'}
+              </h3>
+              <p className="text-sm text-secondary mt-0.5">
+                {environment === 'sandbox'
+                  ? 'Use test card 4242 4242 4242 4242 with any future expiry and CVC'
+                  : 'All transactions will process real payments and affect your balance'}
+              </p>
+            </div>
           </div>
-        )}
-
-        {environment === 'production' && (
-          <div className="mt-4 p-3 bg-success/10 border border-success/20 rounded-xl">
-            <p className="text-sm text-success">
-              <strong>Production Mode:</strong> All transactions are live and will process real payments
-            </p>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* API Credentials Section */}
@@ -283,11 +314,28 @@ export default function SettingsPage() {
           Use these credentials for {environment === 'sandbox' ? 'testing' : 'production'} integrations
         </p>
 
-        <div className="space-y-4">
+        {/* Security Warning */}
+        <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-xl">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-warning mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h4 className="font-semibold text-warning mb-1">Keep your credentials secure</h4>
+              <p className="text-sm text-secondary">
+                Never share your API secret publicly or commit it to version control.
+                Anyone with your secret can make authenticated requests on your behalf.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* API Key */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-foreground">
-                {environment === 'sandbox' ? 'Sandbox' : 'Production'} API Key
+                API Key
               </label>
               <span className={`badge text-xs ${environment === 'sandbox' ? 'badge-secondary' : 'bg-success/10 text-success'}`}>
                 {environment.toUpperCase()}
@@ -312,11 +360,79 @@ export default function SettingsPage() {
               </button>
             </div>
             <p className="text-xs text-secondary mt-1">
-              {environment === 'sandbox'
-                ? 'Use this key for testing. No real charges will be made.'
-                : 'Keep your production API key secure and never share it publicly'}
+              Include this in the <code className="px-1 py-0.5 bg-muted rounded text-xs">X-API-Key</code> header
             </p>
           </div>
+
+          {/* API Secret */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-foreground">
+                API Secret
+              </label>
+              <button
+                onClick={() => setShowSecret(!showSecret)}
+                className="text-xs text-accent hover:underline"
+              >
+                {showSecret ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={apiSecret}
+                readOnly
+                className="input flex-1 font-mono text-sm"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(apiSecret)
+                  setSuccess('API secret copied to clipboard')
+                  setTimeout(() => setSuccess(''), 2000)
+                }}
+                className="btn-secondary"
+              >
+                Copy
+              </button>
+            </div>
+            <p className="text-xs text-secondary mt-1">
+              Use this to sign requests with HMAC-SHA256. See{' '}
+              <a
+                href="https://docs.neurafinance.com/authentication"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent hover:underline"
+              >
+                authentication docs
+              </a>
+            </p>
+          </div>
+        </div>
+
+        {/* Code Example */}
+        <div className="mt-6 p-4 bg-muted/30 rounded-xl">
+          <h4 className="text-sm font-semibold text-foreground mb-2">Quick Start Example</h4>
+          <pre className="text-xs text-secondary overflow-x-auto">
+{`// Node.js example
+const crypto = require('crypto');
+
+const timestamp = Math.floor(Date.now() / 1000).toString();
+const payload = JSON.stringify({ amount: 10000 });
+const signature = crypto
+  .createHmac('sha256', 'your_secret'}')
+  .update(\`\${timestamp}.\${payload}\`)
+  .digest('hex');
+
+fetch('https://api.neurafinance.com/payments', {
+  method: 'POST',
+  headers: {
+    'X-API-Key': '${apiKey ? apiKey.slice(0, 20) + '...' : 'your_key'}',
+    'X-Signature': signature,
+    'X-Timestamp': timestamp,
+  },
+  body: payload
+});`}
+          </pre>
         </div>
       </div>
 

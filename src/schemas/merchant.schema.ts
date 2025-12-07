@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const updateEnvironmentSchema = z.object({
   body: z.object({
-    environment: z.enum(['test', 'live']),
+    environment: z.enum(['sandbox', 'production']),
   }),
 });
 

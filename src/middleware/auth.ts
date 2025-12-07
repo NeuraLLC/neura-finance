@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AppError } from './errorHandler';
+import { verifySignature } from '../utils/hmac';
+import merchantsService from '../services/merchants.service';
 
 /**
  * Extended Request interface with merchant and API key properties
@@ -64,12 +66,14 @@ export const authenticateJWT = (req: Request, res: Response, next: NextFunction)
 };
 
 /**
- * API Key Authentication Middleware
- * Verifies API key from X-API-Key header
+ * API Key Authentication Middleware with HMAC Signature Verification
+ * Verifies API key and HMAC signature from request headers
  */
 export const authenticateAPIKey = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const apiKey = req.headers['x-api-key'] as string | undefined;
+    const signature = req.headers['x-signature'] as string | undefined;
+    const timestamp = req.headers['x-timestamp'] as string | undefined;
 
     if (!apiKey) {
       throw new AppError('API key is required', 401, 'API_KEY_MISSING');
@@ -80,9 +84,44 @@ export const authenticateAPIKey = async (req: Request, res: Response, next: Next
       throw new AppError('Invalid API key format', 401, 'INVALID_API_KEY');
     }
 
-    // Store API key in request for route handlers to validate
+    if (!signature) {
+      throw new AppError('Request signature is required. Include X-Signature header.', 401, 'SIGNATURE_MISSING');
+    }
+
+    if (!timestamp) {
+      throw new AppError('Request timestamp is required. Include X-Timestamp header.', 401, 'TIMESTAMP_MISSING');
+    }
+
+    // Get merchant by API key (validates key exists and merchant is active)
+    const merchant = await merchantsService.getMerchantByApiKey(apiKey);
+
+    // Get raw request body for signature verification
+    const rawBody = (req as any).rawBody || JSON.stringify(req.body);
+
+    // Verify HMAC signature
+    const verification = verifySignature(
+      signature,
+      merchant.api_secret, // This is the hashed secret from DB
+      rawBody,
+      timestamp,
+      300 // 5 minute tolerance
+    );
+
+    if (!verification.valid) {
+      throw new AppError(
+        verification.error || 'Invalid request signature',
+        401,
+        'INVALID_SIGNATURE'
+      );
+    }
+
+    // Store API key and merchant info in request
     (req as AuthRequest).apiKey = apiKey;
     (req as AuthRequest).environment = apiKey.startsWith('npk_test_') ? 'sandbox' : 'production';
+    (req as AuthRequest).merchant = {
+      id: merchant.id,
+      email: merchant.business_email,
+    };
 
     next();
   } catch (error) {

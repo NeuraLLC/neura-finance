@@ -166,8 +166,10 @@ class PaymentsService {
       }
     }
 
-    // Calculate platform fee (2.9% + 30 cents)
-    const platformFee = Math.round(amount * 0.029 + 30);
+    // Calculate platform fee (configurable via env, defaults to 2.9% + 30 cents)
+    const feePercent = parseFloat(process.env.PLATFORM_FEE_PERCENT || '2.9') / 100;
+    const feeFixed = parseInt(process.env.PLATFORM_FEE_FIXED || '30');
+    const platformFee = Math.round(amount * feePercent + feeFixed);
     const merchantAmount = amount - platformFee;
 
     // Create payment intent with Stripe

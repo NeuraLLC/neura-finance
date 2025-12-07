@@ -23,8 +23,9 @@ CREATE TABLE merchants (
     -- Authentication
     password VARCHAR(255) NOT NULL, -- Bcrypt hashed password for dashboard login
     api_key VARCHAR(255) NOT NULL UNIQUE, -- Production API key
-    api_secret VARCHAR(255) NOT NULL, -- Hashed secret for HMAC
+    api_secret VARCHAR(255) NOT NULL, -- Production secret for HMAC
     sandbox_api_key VARCHAR(255) UNIQUE, -- Sandbox/test API key
+    sandbox_api_secret VARCHAR(255), -- Sandbox secret for HMAC
     webhook_url VARCHAR(500), -- Merchant's webhook endpoint
     webhook_secret VARCHAR(255), -- For signing webhook payloads
     environment VARCHAR(50) DEFAULT 'sandbox', -- 'sandbox' or 'production'

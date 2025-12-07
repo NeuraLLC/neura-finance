@@ -55,6 +55,7 @@ export default function PaymentLinksPage() {
   const totalRevenue = paymentLinks.reduce((sum, link) => sum + link.total_collected, 0)
   const totalViews = paymentLinks.reduce((sum, link) => sum + link.view_count, 0)
   const totalPayments = paymentLinks.reduce((sum, link) => sum + link.payment_count, 0)
+  const conversionRate = totalViews > 0 ? ((totalPayments / totalViews) * 100).toFixed(1) : '0.0'
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -86,21 +87,21 @@ export default function PaymentLinksPage() {
           </p>
         </div>
         <div className="bg-card rounded-apple p-4 border border-border">
-          <p className="text-xs text-secondary mb-1">Total Views</p>
-          <p className="text-2xl font-semibold text-accent">
-            {totalViews.toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-card rounded-apple p-4 border border-border">
-          <p className="text-xs text-secondary mb-1">Payments</p>
+          <p className="text-xs text-secondary mb-1">Total Payments</p>
           <p className="text-2xl font-semibold text-success">
             {totalPayments}
           </p>
         </div>
         <div className="bg-card rounded-apple p-4 border border-border">
-          <p className="text-xs text-secondary mb-1">Revenue</p>
+          <p className="text-xs text-secondary mb-1">Total Revenue</p>
           <p className="text-2xl font-semibold text-foreground">
             {formatCurrency(totalRevenue, 'USD')}
+          </p>
+        </div>
+        <div className="bg-card rounded-apple p-4 border border-border">
+          <p className="text-xs text-secondary mb-1">Conversion Rate</p>
+          <p className="text-2xl font-semibold text-accent">
+            {conversionRate}%
           </p>
         </div>
       </div>

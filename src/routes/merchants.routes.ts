@@ -22,6 +22,15 @@ router.get('/:id', authenticateJWT, asyncHandler(async (req: AuthenticatedReques
   res.json({ success: true, data: { merchant } });
 }));
 
+router.get('/:id/credentials', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own credentials' }});
+  }
+  const credentials = await merchantsService.getApiCredentials(id);
+  res.json({ success: true, data: credentials });
+}));
+
 router.patch('/:id/environment', authenticateJWT, validate(updateEnvironmentSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { id } = req.params;
   const { environment } = req.body;

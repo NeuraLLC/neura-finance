@@ -63,7 +63,7 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3001',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'Idempotency-Key'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Signature', 'X-Timestamp', 'Idempotency-Key'],
 }));
 
 // 3. DDoS Protection (First line of defense)
@@ -82,8 +82,14 @@ app.use('/api/', advancedRateLimiting.globalLimiter);
 // Special handling for Stripe webhooks (needs raw body)
 app.use('/webhooks/stripe', express.raw({ type: 'application/json' }));
 
-// JSON body parser for all other routes
-app.use(express.json({ limit: '10mb' }));
+// Capture raw body for HMAC signature verification
+app.use(express.json({
+  limit: '10mb',
+  verify: (req: any, _res, buf) => {
+    // Store raw body for HMAC verification
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 

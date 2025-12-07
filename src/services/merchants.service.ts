@@ -93,16 +93,48 @@ class MerchantsService {
   }
 
   /**
+   * Get API credentials (includes secret)
+   * WARNING: Only call this for authenticated merchant viewing their own credentials
+   */
+  async getApiCredentials(merchantId: string): Promise<{
+    api_key: string;
+    sandbox_api_key: string | undefined;
+    api_secret: string;
+    environment: string;
+  }> {
+    const merchant = await db.findById<Merchant>('merchants', merchantId);
+
+    if (!merchant) {
+      throw new AppError('Merchant not found', 404, 'MERCHANT_NOT_FOUND');
+    }
+
+    // Return the correct secret based on current environment
+    const currentSecret = merchant.environment === 'sandbox'
+      ? (merchant as any).sandbox_api_secret || merchant.api_secret
+      : merchant.api_secret;
+
+    return {
+      api_key: merchant.api_key,
+      sandbox_api_key: merchant.sandbox_api_key,
+      api_secret: currentSecret,
+      environment: merchant.environment,
+    };
+  }
+
+  /**
    * Get merchant by API key
    */
   async getMerchantByApiKey(apiKey: string): Promise<Merchant> {
     let merchant: Merchant | null;
+    let isSandbox = false;
 
     // Check if it's a sandbox or production key
     if (apiKey.startsWith('npk_test_')) {
       merchant = await db.findOne<Merchant>('merchants', { sandbox_api_key: apiKey });
+      isSandbox = true;
     } else if (apiKey.startsWith('npk_live_')) {
       merchant = await db.findOne<Merchant>('merchants', { api_key: apiKey });
+      isSandbox = false;
     } else {
       throw new AppError('Invalid API key format', 401, 'INVALID_API_KEY');
     }
@@ -114,6 +146,12 @@ class MerchantsService {
     // Check if merchant is active
     if (!merchant.is_active || merchant.status === 'suspended' || merchant.status === 'closed') {
       throw new AppError('Merchant account is not active', 403, 'MERCHANT_INACTIVE');
+    }
+
+    // Set the correct api_secret based on which key was used
+    // This ensures HMAC verification uses the right secret
+    if (isSandbox) {
+      merchant.api_secret = (merchant as any).sandbox_api_secret || merchant.api_secret;
     }
 
     return merchant;
