@@ -78,8 +78,10 @@ export const api = {
     }),
 
   // Payment Links
-  getPaymentLinks: (limit = 100) =>
-    apiRequest<any[]>(`/payment-links?limit=${limit}`),
+  getPaymentLinks: (limit = 100) => {
+    const merchantId = localStorage.getItem('merchantId');
+    return apiRequest<any>(`/merchants/${merchantId}/payment-links?limit=${limit}`);
+  },
 
   getPaymentLink: (id: string) =>
     apiRequest<any>(`/payment-links/${id}`),
@@ -162,5 +164,15 @@ export const api = {
     apiRequest<any>(`/disputes/${disputeId}/notes`, {
       method: 'PUT',
       body: { notes },
+    }),
+
+  // Branding
+  getBranding: (merchantId: string) =>
+    apiRequest<any>(`/merchants/${merchantId}/branding`),
+
+  updateBranding: (merchantId: string, data: any) =>
+    apiRequest<any>(`/merchants/${merchantId}/branding`, {
+      method: 'PATCH',
+      body: data,
     }),
 }

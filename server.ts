@@ -3,7 +3,7 @@ import express, { Request, Response, Application } from 'express';
 import * as Sentry from '@sentry/node';
 import helmet from 'helmet';
 import cors from 'cors';
-import { errorHandler } from './src/middleware/errorHandler';
+import { errorHandler, asyncHandler } from './src/middleware/errorHandler';
 import { requestLogger } from './src/middleware/logger';
 import { posthogMiddleware } from './src/middleware/posthog';
 
@@ -14,6 +14,7 @@ import { advancedRateLimiting } from './src/middleware/advancedRateLimiting';
 const authRoutes = require('./src/routes/auth.routes').default;
 const merchantRoutes = require('./src/routes/merchants.routes').default;
 const paymentRoutes = require('./src/routes/payments.routes').default;
+const paymentLinksRoutes = require('./src/routes/paymentLinks.routes').default;
 const stripeConnectRoutes = require('./src/routes/stripeConnect.routes').default;
 const webhookRoutes = require('./src/routes/webhooks.routes').default;
 const disputeRoutes = require('./src/routes/disputes.routes').default;
@@ -180,6 +181,9 @@ app.use('/api/merchants', merchantRoutes);
 // Payment routes (payment-specific rate limiting)
 app.use('/api/payments', advancedRateLimiting.paymentLimiter, paymentRoutes);
 
+// Payment Links routes (standard rate limiting)
+app.use('/api/payment-links', paymentLinksRoutes);
+
 // Dispute routes (standard rate limiting)
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/merchants', disputeRoutes);
@@ -192,6 +196,44 @@ app.use('/api/webhooks', advancedRateLimiting.webhookLimiter, webhookRoutes);
 
 // Utility routes (public, for client IP, etc.)
 // app.use('/utils', utilsRoutes);
+
+// ==============================================
+// PUBLIC ROUTES (No authentication required)
+// ==============================================
+
+// Public payment link page - serve HTML
+app.get('/pay/:slug', (_req: Request, res: Response) => {
+  res.sendFile('pay.html', { root: './public' });
+});
+
+// Public payment link API - get data
+app.get('/api/pay/:slug', asyncHandler(async (req: Request, res: Response) => {
+  const paymentLinksService = require('./src/services/paymentLinks.service').default;
+  const merchantsService = require('./src/services/merchants.service').default;
+
+  try {
+    const { slug } = req.params;
+    const paymentLink = await paymentLinksService.getPaymentLinkBySlug(slug);
+    const branding = await merchantsService.getBranding(paymentLink.merchant_id);
+
+    // Return payment link data with branding
+    res.json({
+      success: true,
+      data: {
+        payment_link: paymentLink,
+        branding,
+      },
+    });
+  } catch (error: any) {
+    res.status(error.statusCode || 404).json({
+      success: false,
+      error: {
+        code: error.code || 'PAYMENT_LINK_ERROR',
+        message: error.message || 'Failed to load payment link',
+      },
+    });
+  }
+}));
 
 // ==============================================
 // ERROR HANDLING

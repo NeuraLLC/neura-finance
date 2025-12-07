@@ -6,6 +6,7 @@ import { asyncHandler } from '../middleware/errorHandler';
 
 import { validate } from '../middleware/validate';
 import { updateEnvironmentSchema, updateWebhookSchema, updateProfileSchema } from '../schemas/merchant.schema';
+import { updateBrandingSchema } from '../schemas/branding.schema';
 
 const router = express.Router();
 
@@ -84,8 +85,53 @@ router.get('/:id/payments', authenticateJWT, asyncHandler(async (req: Authentica
     start_date: start_date as string,
     end_date: end_date as string
   });
-  
+
   res.json({ success: true, data: { transactions, count: transactions.length } });
+}));
+
+router.get('/:id/branding', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own merchant data' }});
+  }
+  const branding = await merchantsService.getBranding(id);
+  res.json({ success: true, data: { branding } });
+}));
+
+router.patch('/:id/branding', authenticateJWT, validate(updateBrandingSchema), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only update your own merchant data' }});
+  }
+  const branding = await merchantsService.updateBranding(id, req.body);
+  res.json({ success: true, data: { branding } });
+}));
+
+// Payment Links routes for dashboard (JWT authenticated)
+router.get('/:id/payment-links', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  const { limit } = req.query;
+
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only access your own merchant data' }});
+  }
+
+  const db = require('../services/database.service').default;
+
+  // Get payment links by merchant ID (skip API key authentication)
+  const client = db.getClient();
+  const { data: paymentLinks, error } = await client
+    .from('payment_links')
+    .select('*')
+    .eq('merchant_id', id)
+    .order('created_at', { ascending: false })
+    .range(0, (limit ? parseInt(limit as string) : 100) - 1);
+
+  if (error) {
+    throw new Error(`Database query error: ${error.message}`);
+  }
+
+  res.json({ success: true, data: paymentLinks || [] });
 }));
 
 export default router;

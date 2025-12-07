@@ -2,6 +2,14 @@ import crypto from 'crypto';
 import db from './database.service';
 import { AppError } from '../middleware/errorHandler';
 
+export interface Branding {
+  logo_url?: string | null;
+  primary_color?: string;
+  merchant_display_name?: string | null;
+  default_currency?: string;
+  payment_methods?: string[];
+}
+
 export interface Merchant {
   id: string;
   business_name: string;
@@ -26,6 +34,7 @@ export interface Merchant {
   brand_logo_url?: string;
   brand_color?: string;
   brand_name?: string;
+  branding?: Branding;
   created_at?: string;
   updated_at?: string;
   // OAuth fields
@@ -304,6 +313,62 @@ class MerchantsService {
     delete (merchant as any).webhook_secret;
 
     return merchant;
+  }
+
+  /**
+   * Get merchant branding configuration
+   */
+  async getBranding(merchantId: string): Promise<Branding> {
+    const merchant = await db.findById<Merchant>('merchants', merchantId);
+
+    if (!merchant) {
+      throw new AppError('Merchant not found', 404, 'MERCHANT_NOT_FOUND');
+    }
+
+    // Return branding or default values
+    return merchant.branding || {
+      logo_url: null,
+      primary_color: '#2563eb',
+      merchant_display_name: null,
+      default_currency: merchant.default_currency || 'usd',
+      payment_methods: ['card'],
+    };
+  }
+
+  /**
+   * Update merchant branding configuration
+   */
+  async updateBranding(
+    merchantId: string,
+    brandingUpdates: Partial<Branding>
+  ): Promise<Branding> {
+    const merchant = await db.findById<Merchant>('merchants', merchantId);
+
+    if (!merchant) {
+      throw new AppError('Merchant not found', 404, 'MERCHANT_NOT_FOUND');
+    }
+
+    // Get current branding
+    const currentBranding: Branding = merchant.branding || {
+      logo_url: null,
+      primary_color: '#2563eb',
+      merchant_display_name: null,
+      default_currency: merchant.default_currency || 'usd',
+      payment_methods: ['card'],
+    };
+
+    // Merge with updates
+    const updatedBranding: Branding = {
+      ...currentBranding,
+      ...brandingUpdates,
+    };
+
+    // Update merchant
+    await db.update<Merchant>('merchants', merchantId, {
+      branding: updatedBranding,
+    } as any);
+
+    return updatedBranding;
   }
 }
 

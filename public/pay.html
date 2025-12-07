@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Link</title>
+  <script src="https://js.stripe.com/v3/"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo img {
+      max-height: 60px;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    .merchant-name {
+      font-size: 28px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .description {
+      text-align: center;
+      color: #6b7280;
+      margin-bottom: 32px;
+      font-size: 16px;
+    }
+
+    .amount-section {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .amount-label {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+
+    .amount {
+      font-size: 42px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .custom-amount-input {
+      width: 100%;
+      font-size: 32px;
+      font-weight: 700;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .custom-amount-input:focus {
+      outline: none;
+      border-color: var(--primary-color, #2563eb);
+    }
+
+    .amount-range {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    #payment-element {
+      margin-bottom: 24px;
+    }
+
+    .pay-button {
+      width: 100%;
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .pay-button:hover:not(:disabled) {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .pay-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      background: #fee2e2;
+      color: #dc2626;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .success-message {
+      background: #d1fae5;
+      color: #059669;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: white;
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .powered-by {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .powered-by a {
+      color: white;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Loading payment link...</p>
+    </div>
+
+    <div class="card" id="payment-card" style="display: none;">
+      <div class="logo" id="logo-container"></div>
+
+      <h1 class="merchant-name" id="merchant-name"></h1>
+      <p class="description" id="description"></p>
+
+      <div id="error-container"></div>
+      <div id="success-container"></div>
+
+      <div class="amount-section">
+        <div class="amount-label">Amount</div>
+        <div id="amount-display"></div>
+      </div>
+
+      <form id="payment-form">
+        <div id="payment-element"></div>
+        <button type="submit" class="pay-button" id="pay-button">
+          Pay Now
+        </button>
+      </form>
+    </div>
+
+    <div class="powered-by">
+      Powered by <a href="https://neurafinance.com" target="_blank">Neura Finance</a>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    const slug = window.location.pathname.split('/').pop();
+
+    let stripe;
+    let elements;
+    let paymentLink;
+    let branding;
+    let customAmount;
+
+    async function init() {
+      try {
+        // Fetch payment link data
+        const response = await fetch(`${API_URL}/api/pay/${slug}`);
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error.message);
+        }
+
+        paymentLink = data.data.payment_link;
+        branding = data.data.branding;
+
+        // Apply branding
+        applyBranding();
+
+        // Show payment card
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('payment-card').style.display = 'block';
+
+        // Initialize Stripe (you'll need to get the publishable key from the merchant)
+        // For now, we'll handle this when creating the payment intent
+      } catch (error) {
+        showError(error.message);
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    function applyBranding() {
+      const root = document.documentElement;
+
+      // Apply primary color
+      if (branding.primary_color) {
+        root.style.setProperty('--primary-color', branding.primary_color);
+        document.getElementById('pay-button').style.backgroundColor = branding.primary_color;
+      }
+
+      // Apply logo
+      if (branding.logo_url) {
+        const logoContainer = document.getElementById('logo-container');
+        const img = document.createElement('img');
+        img.src = branding.logo_url;
+        img.alt = 'Logo';
+        logoContainer.appendChild(img);
+      }
+
+      // Apply merchant name
+      const merchantName = branding.merchant_display_name || paymentLink.merchant_id;
+      document.getElementById('merchant-name').textContent = merchantName;
+      document.getElementById('merchant-name').style.color = branding.primary_color;
+
+      // Apply description
+      if (paymentLink.description) {
+        document.getElementById('description').textContent = paymentLink.description;
+      } else {
+        document.getElementById('description').style.display = 'none';
+      }
+
+      // Display amount
+      const amountDisplay = document.getElementById('amount-display');
+      if (paymentLink.allow_custom_amount) {
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'custom-amount-input';
+        input.placeholder = '0.00';
+        input.step = '0.01';
+        input.min = paymentLink.min_amount ? (paymentLink.min_amount / 100) : '0';
+        if (paymentLink.max_amount) {
+          input.max = paymentLink.max_amount / 100;
+        }
+        input.addEventListener('input', (e) => {
+          customAmount = Math.round(parseFloat(e.target.value) * 100);
+        });
+        amountDisplay.appendChild(input);
+
+        if (paymentLink.min_amount && paymentLink.max_amount) {
+          const range = document.createElement('div');
+          range.className = 'amount-range';
+          range.textContent = `Min: ${formatCurrency(paymentLink.min_amount, paymentLink.currency)} - Max: ${formatCurrency(paymentLink.max_amount, paymentLink.currency)}`;
+          amountDisplay.appendChild(range);
+        }
+      } else {
+        const amount = document.createElement('div');
+        amount.className = 'amount';
+        amount.textContent = formatCurrency(paymentLink.amount, paymentLink.currency);
+        amountDisplay.appendChild(amount);
+      }
+    }
+
+    function formatCurrency(amount, currency) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency.toUpperCase(),
+      }).format(amount / 100);
+    }
+
+    function showError(message) {
+      const container = document.getElementById('error-container');
+      container.innerHTML = `<div class="error-message">${message}</div>`;
+    }
+
+    function showSuccess(message) {
+      const container = document.getElementById('success-container');
+      container.innerHTML = `<div class="success-message">${message}</div>`;
+    }
+
+    // Initialize on page load
+    init();
+
+    // Handle form submission
+    document.getElementById('payment-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const amount = paymentLink.allow_custom_amount ? customAmount : paymentLink.amount;
+
+      if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+      }
+
+      // Here you would create a payment intent and process the payment
+      // This would require integrating with your payments API
+      showError('Payment processing is not yet implemented. Please complete the Stripe integration.');
+    });
+  </script>
+</body>
+</html>
