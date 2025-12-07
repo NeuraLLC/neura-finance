@@ -11,6 +11,7 @@ export interface Merchant {
   api_key: string;
   api_secret: string;
   sandbox_api_key?: string;
+  sandbox_api_secret?: string;
   webhook_secret?: string;
   webhook_url?: string;
   stripe_account_id?: string;

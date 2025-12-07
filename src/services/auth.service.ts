@@ -25,7 +25,9 @@ interface SignupResponse {
   };
   api_credentials: {
     api_key: string;
+    sandbox_api_key: string;
     api_secret: string;
+    sandbox_api_secret: string;
   };
   onboarding_url?: string;
   requires_onboarding: boolean;
