@@ -92,12 +92,4 @@ router.post('/payout', authenticateJWT, asyncHandler(async (req: AuthenticatedRe
   res.json({ success: true, data: { transferId, message: 'Payout initiated successfully' } });
 }));
 
-// Test Deferred Payment (for dev/testing)
-router.post('/test-deferred-payment', authenticateJWT, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  const merchantId = req.merchant.id;
-  const { amount, currency, paymentMethodId } = req.body;
-  const paymentIntent = await stripeConnectService.processDeferredPayment(merchantId, amount, currency, paymentMethodId);
-  res.json({ success: true, data: paymentIntent });
-}));
-
 export default router;
