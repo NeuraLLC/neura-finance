@@ -25,6 +25,8 @@ export default function BrandingPage() {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadMethod, setUploadMethod] = useState<'url' | 'file'>('url')
 
   useEffect(() => {
     loadBranding()
@@ -62,6 +64,41 @@ export default function BrandingPage() {
       setError(err.message || 'Failed to save branding settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be smaller than 5MB')
+      return
+    }
+
+    try {
+      setUploading(true)
+      setError('')
+
+      const merchantId = localStorage.getItem('merchantId')
+      if (!merchantId) return
+
+      const response = await api.uploadLogo(merchantId, file)
+
+      setBranding({ ...branding, logo_url: response.logo_url })
+      setSuccess('Logo uploaded successfully')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload logo')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -171,30 +208,112 @@ export default function BrandingPage() {
         </div>
       </div>
 
-      {/* Logo URL */}
+      {/* Logo */}
       <div className="card">
         <h2 className="text-xl font-semibold text-foreground mb-2">Logo</h2>
         <p className="text-sm text-secondary mb-6">
-          Enter a URL to your logo image. For best results, use a transparent PNG with a 3:1 aspect ratio.
+          Upload a logo image or provide a URL. For best results, use a transparent PNG with a 3:1 aspect ratio.
         </p>
 
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Logo URL
-            </label>
-            <input
-              type="url"
-              value={branding.logo_url || ''}
-              onChange={(e) => setBranding({ ...branding, logo_url: e.target.value })}
-              className="input"
-              placeholder="https://example.com/logo.png"
-            />
-            <p className="text-xs text-secondary mt-1">
-              You can use image hosting services like Imgur, Cloudinary, or your own CDN
-            </p>
+          {/* Upload Method Toggle */}
+          <div className="flex gap-2 p-1 bg-muted rounded-xl w-fit">
+            <button
+              onClick={() => setUploadMethod('url')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                uploadMethod === 'url'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-secondary hover:text-foreground'
+              }`}
+            >
+              Paste URL
+            </button>
+            <button
+              onClick={() => setUploadMethod('file')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                uploadMethod === 'file'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-secondary hover:text-foreground'
+              }`}
+            >
+              Upload File
+            </button>
           </div>
 
+          {/* URL Input */}
+          {uploadMethod === 'url' && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Logo URL
+              </label>
+              <input
+                type="url"
+                value={branding.logo_url || ''}
+                onChange={(e) => setBranding({ ...branding, logo_url: e.target.value })}
+                className="input"
+                placeholder="https://example.com/logo.png"
+              />
+              <p className="text-xs text-secondary mt-1">
+                You can use image hosting services like Imgur, Cloudinary, or your own CDN
+              </p>
+            </div>
+          )}
+
+          {/* File Upload */}
+          {uploadMethod === 'file' && (
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Upload Logo
+              </label>
+              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center hover:border-foreground/30 transition-colors">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={uploading}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className="cursor-pointer flex flex-col items-center gap-2"
+                >
+                  {uploading ? (
+                    <>
+                      <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-sm text-secondary">Uploading...</p>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-12 h-12 text-secondary"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                        />
+                      </svg>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          Click to upload or drag and drop
+                        </p>
+                        <p className="text-xs text-secondary mt-1">
+                          PNG, JPG, GIF up to 5MB
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* Logo Preview */}
           {branding.logo_url && (
             <div>
               <p className="text-xs text-secondary mb-2">Logo Preview</p>
@@ -209,6 +328,12 @@ export default function BrandingPage() {
                   }}
                 />
               </div>
+              <button
+                onClick={() => setBranding({ ...branding, logo_url: null })}
+                className="ml-3 text-xs text-error hover:underline"
+              >
+                Remove Logo
+              </button>
             </div>
           )}
         </div>

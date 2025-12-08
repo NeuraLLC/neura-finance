@@ -175,4 +175,41 @@ export const api = {
       method: 'PATCH',
       body: data,
     }),
+
+  uploadLogo: async (merchantId: string, file: File) => {
+    const accessToken = localStorage.getItem('accessToken')
+
+    if (!accessToken) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/'
+      }
+      throw new Error('Not authenticated')
+    }
+
+    const formData = new FormData()
+    formData.append('logo', file)
+
+    const response = await fetch(`${API_URL}/merchants/${merchantId}/branding/upload-logo`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.clear()
+        if (typeof window !== 'undefined') {
+          window.location.href = '/'
+        }
+      }
+
+      const error = await response.json().catch(() => ({ error: { message: 'Upload failed' } }))
+      throw new Error(error.error?.message || error.message || `HTTP ${response.status}`)
+    }
+
+    const responseData = await response.json()
+    return responseData.data || responseData
+  },
 }

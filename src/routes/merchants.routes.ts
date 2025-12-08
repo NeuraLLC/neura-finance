@@ -3,6 +3,7 @@ import merchantsService from '../services/merchants.service';
 import paymentsService from '../services/payments.service';
 import { authenticateJWT } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
+import { uploadLogo } from '../config/upload.config';
 
 import { validate } from '../middleware/validate';
 import { updateEnvironmentSchema, updateWebhookSchema, updateProfileSchema } from '../schemas/merchant.schema';
@@ -105,6 +106,32 @@ router.patch('/:id/branding', authenticateJWT, validate(updateBrandingSchema), a
   }
   const branding = await merchantsService.updateBranding(id, req.body);
   res.json({ success: true, data: { branding } });
+}));
+
+router.post('/:id/branding/upload-logo', authenticateJWT, uploadLogo.single('logo'), asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.params;
+  if (req.merchant.id !== id) {
+    return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'You can only upload logos for your own merchant account' }});
+  }
+
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: { code: 'NO_FILE', message: 'No file uploaded' }});
+  }
+
+  // Generate public URL for the uploaded file
+  const baseUrl = process.env.API_URL || 'http://localhost:3000';
+  const logoUrl = `${baseUrl}/uploads/logos/${req.file.filename}`;
+
+  // Update branding with new logo URL
+  const branding = await merchantsService.updateBranding(id, { logo_url: logoUrl });
+
+  res.json({
+    success: true,
+    data: {
+      logo_url: logoUrl,
+      branding
+    }
+  });
 }));
 
 // Payment Links routes for dashboard (JWT authenticated)
